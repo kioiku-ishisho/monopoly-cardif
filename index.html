@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="人生富翁：用大富翁體驗人生各階段的財務決策，學習理財與資產分配。">
+  <title>人生富翁｜選擇你的職業</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/index.css">
+</head>
+<body class="page-index">
+  <a class="skip-link" href="#main">跳到主要內容</a>
+
+  <header class="topbar">
+    <p class="brand" aria-hidden="true">人生富翁</p>
+    <nav class="top-actions" aria-label="主選單">
+      <button class="icon-btn solid" type="button" data-open="dlg-howto" data-icon="help" aria-label="如何遊玩"></button>
+      <button class="icon-btn solid" type="button" data-open="dlg-history" data-icon="history" aria-label="歷史遊玩紀錄"></button>
+      <button class="icon-btn solid" type="button" data-open="dlg-tips" data-icon="bulb" aria-label="歷史取得提示"></button>
+      <button class="icon-btn solid" type="button" data-open="dlg-settings" data-icon="gear" aria-label="設定"></button>
+    </nav>
+  </header>
+
+  <main id="main" class="hero">
+    <h1 class="hero-title">人生富翁<span class="hero-sub">一場關於金錢與人生的冒險</span></h1>
+
+    <section class="character-card" aria-labelledby="job-label">
+      <p id="job-label" class="sr-only">你的角色</p>
+      <div class="avatar-wrap">
+        <div class="avatar" id="avatar" aria-hidden="true"></div>
+      </div>
+
+      <div class="job-row">
+        <h2 class="job-name" id="job-name"></h2>
+        <button class="icon-btn solid" type="button" id="btn-reroll" data-icon="shuffle" aria-label="隨機更換職業"></button>
+      </div>
+      <p class="job-desc" id="job-desc"></p>
+
+      <dl class="salary">
+        <dt>月薪</dt>
+        <dd id="job-salary"></dd>
+      </dl>
+
+      <button class="btn btn-primary btn-lg start-btn" type="button" id="btn-start">開始遊玩</button>
+    </section>
+
+    <p class="sr-only" aria-live="polite" id="job-live"></p>
+  </main>
+
+  <!-- 如何遊玩 -->
+  <dialog class="modal" id="dlg-howto" aria-labelledby="dlg-howto-title">
+    <div class="modal-head">
+      <h2 id="dlg-howto-title">如何遊玩</h2>
+      <button class="icon-btn" type="button" data-close data-icon="close" aria-label="關閉"></button>
+    </div>
+    <div class="modal-body">
+      <ol>
+        <li>在首頁按 <strong>隨機更換職業</strong> 選擇你的人生起點，每個職業的薪水與開銷都不同。</li>
+        <li>按 <strong>開始遊玩</strong> 進入遊戲，從 25 歲的 <strong>青年圈</strong> 出發。</li>
+        <li>按 <strong>擲骰子</strong> 依點數前進，踩到的格子會發生事件，你需要做出財務決策。</li>
+        <li>走一圈代表 <strong>5 年</strong>。青年（25–40 歲）走完 3 圈後進入 <strong>中年圈</strong>（40–65 歲），之後進入 <strong>老年圈</strong>（65 歲以上）。</li>
+        <li>每走一格（3 個月）會自動領薪水並支付生活費；也可以在右上角 <strong>股票</strong> 買賣投資。</li>
+        <li><strong>現金歸零（破產）</strong> 或 <strong>健康指數歸零</strong> 時遊戲結束，AI 會為你的人生評分並給予建議。</li>
+      </ol>
+      <p><strong>小技巧：</strong>地圖可以拖曳、雙指或滑鼠滾輪縮放；用鍵盤時，先聚焦地圖，再用方向鍵移動、「+」「−」縮放。</p>
+    </div>
+  </dialog>
+
+  <!-- 歷史遊玩紀錄 -->
+  <dialog class="modal" id="dlg-history" aria-labelledby="dlg-history-title">
+    <div class="modal-head">
+      <h2 id="dlg-history-title">歷史遊玩紀錄</h2>
+      <button class="icon-btn" type="button" data-close data-icon="close" aria-label="關閉"></button>
+    </div>
+    <div class="modal-body" id="history-body"></div>
+  </dialog>
+
+  <!-- 歷史取得提示 -->
+  <dialog class="modal" id="dlg-tips" aria-labelledby="dlg-tips-title">
+    <div class="modal-head">
+      <h2 id="dlg-tips-title">歷史取得提示</h2>
+      <button class="icon-btn" type="button" data-close data-icon="close" aria-label="關閉"></button>
+    </div>
+    <div class="modal-body" id="tips-body"></div>
+  </dialog>
+
+  <!-- 設定 -->
+  <dialog class="modal" id="dlg-settings" aria-labelledby="dlg-settings-title">
+    <div class="modal-head">
+      <h2 id="dlg-settings-title">設定</h2>
+      <button class="icon-btn" type="button" data-close data-icon="close" aria-label="關閉"></button>
+    </div>
+    <div class="modal-body">
+      <form id="settings-form">
+        <div class="field">
+          <label for="set-lang">語言</label>
+          <select id="set-lang" name="lang">
+            <option value="zh-Hant">繁體中文</option>
+          </select>
+        </div>
+        <fieldset class="field">
+          <legend>文字大小</legend>
+          <div class="radio-row">
+            <label><input type="radio" name="font" value="normal"> 標準</label>
+            <label><input type="radio" name="font" value="large"> 大</label>
+            <label><input type="radio" name="font" value="xlarge"> 特大</label>
+          </div>
+        </fieldset>
+        <label class="switch-row">減少動態效果 <input type="checkbox" name="reduceMotion"></label>
+        <label class="switch-row">高對比模式 <input type="checkbox" name="highContrast"></label>
+      </form>
+      <hr class="divider">
+      <button class="btn btn-ghost danger-text" type="button" id="btn-clear">清除所有遊玩紀錄與提示</button>
+    </div>
+  </dialog>
+
+  <script src="js/storage.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/index.js"></script>
+</body>
+</html>

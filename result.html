@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>人生富翁｜人生結算</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/result.css">
+</head>
+<body class="page-result">
+  <a class="skip-link" href="#main">跳到主要內容</a>
+
+  <main id="main" class="result" aria-busy="true">
+    <header class="result-head">
+      <h1>人生結算</h1>
+      <p class="result-meta" id="result-meta"></p>
+    </header>
+
+    <div id="loading" class="loading" role="status">
+      <div class="spinner" aria-hidden="true"></div>
+      <p>AI 正在分析你的人生…</p>
+    </div>
+
+    <div id="content" hidden>
+      <div class="top-cards">
+        <section class="card score-card" aria-labelledby="score-title">
+          <h2 id="score-title">AI 評分</h2>
+          <div class="score-ring" id="score-ring" role="img">
+            <div class="score-inner">
+              <span class="score-num" id="score-num"></span>
+              <span class="score-grade" id="score-grade"></span>
+            </div>
+          </div>
+        </section>
+
+        <section class="card rank-card" aria-labelledby="rank-title">
+          <h2 id="rank-title">全服排名</h2>
+          <p class="rank-big" id="rank-big"></p>
+          <p class="rank-sub" id="rank-sub"></p>
+          <p class="rank-note" id="rank-note"></p>
+        </section>
+      </div>
+
+      <section class="card" aria-labelledby="stats-title">
+        <h2 id="stats-title">人生數據</h2>
+        <dl class="stat-grid" id="stat-grid"></dl>
+      </section>
+
+      <section class="card" aria-labelledby="summary-title">
+        <h2 id="summary-title">AI 遊戲總結</h2>
+        <p id="summary"></p>
+      </section>
+
+      <section class="card" aria-labelledby="decision-title">
+        <h2 id="decision-title">AI 決策回顧</h2>
+        <ul class="decision-list" id="decision-list"></ul>
+      </section>
+
+      <section class="card" aria-labelledby="advice-title">
+        <h2 id="advice-title">AI 理財建議</h2>
+        <ol class="advice-list" id="advice-list"></ol>
+        <p class="unlock-note" id="unlock-note" aria-live="polite"></p>
+      </section>
+    </div>
+
+    <div id="empty" class="card empty-state" hidden>
+      <p>找不到本局的遊戲結果，可能已經看過或尚未完成遊戲。</p>
+    </div>
+
+    <div class="home-wrap">
+      <a class="btn btn-primary btn-lg" href="index.html" data-icon="home">回到主頁</a>
+    </div>
+  </main>
+
+  <script src="js/storage.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/result.js"></script>
+</body>
+</html>

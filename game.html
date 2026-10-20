@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>人生富翁｜遊戲中</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/game.css">
+</head>
+<body class="page-game">
+  <a class="skip-link" href="#btn-dice">跳到擲骰子按鈕</a>
+  <h1 class="sr-only">人生富翁 遊戲畫面</h1>
+
+  <header class="game-top">
+    <div class="top-group">
+      <button class="pill-btn" type="button" id="btn-quit" data-icon="quit"><span class="pill-text">離開</span></button>
+      <button class="pill-btn" type="button" id="btn-pause" data-icon="pause"><span class="pill-text">暫停</span></button>
+    </div>
+    <p class="stage-chip" id="stage-chip" aria-live="polite"></p>
+    <div class="top-group">
+      <button class="pill-btn" type="button" id="btn-stock" data-icon="chart"><span class="pill-text">股票</span></button>
+      <button class="pill-btn" type="button" id="btn-history" data-icon="news"><span class="pill-text">歷史事件</span></button>
+    </div>
+  </header>
+
+  <main class="game-main">
+    <div class="board-viewport" id="board-viewport" tabindex="0" role="region"
+         aria-roledescription="地圖" aria-label="大富翁地圖" aria-describedby="map-help">
+      <div class="board" id="board">
+        <ol class="tiles" id="tiles" aria-label="地圖格子"></ol>
+        <div class="board-center" id="board-center" aria-hidden="true"></div>
+        <div class="token" id="token" aria-hidden="true"></div>
+      </div>
+    </div>
+    <p class="sr-only" id="map-help">可拖曳移動地圖、滾輪或雙指縮放。鍵盤操作：方向鍵移動，加號與減號縮放，0 重置視角。</p>
+
+    <div class="map-controls" role="group" aria-label="地圖視角">
+      <button class="icon-btn solid" type="button" id="btn-zoom-in" data-icon="plus" aria-label="放大地圖"></button>
+      <button class="icon-btn solid" type="button" id="btn-zoom-out" data-icon="minus" aria-label="縮小地圖"></button>
+      <button class="icon-btn solid" type="button" id="btn-zoom-me" data-icon="target" aria-label="以我的位置為中心"></button>
+    </div>
+
+    <div class="dice-area">
+      <button class="dice-btn" type="button" id="btn-dice" aria-describedby="dice-result">
+        <span class="dice-face" id="dice-face" aria-hidden="true">🎲</span>
+        <span class="dice-label">擲骰子</span>
+      </button>
+      <p class="dice-result" id="dice-result" aria-live="polite"></p>
+    </div>
+  </main>
+
+  <footer class="player-bar">
+    <button class="player-summary" type="button" id="btn-sheet" aria-expanded="false" aria-controls="sheet">
+      <span class="stat">
+        <span class="stat-label">現金</span>
+        <span class="stat-value" id="sum-cash"></span>
+      </span>
+      <span class="stat">
+        <span class="stat-label">健康指數</span>
+        <span class="stat-value" id="sum-health"></span>
+        <span class="meter" id="sum-health-meter" aria-hidden="true"><span></span></span>
+      </span>
+      <span class="sheet-hint" data-icon="chevronUp"><span class="sr-only">展開個人資料</span></span>
+    </button>
+  </footer>
+
+  <div class="sheet-scrim" id="sheet-scrim" hidden></div>
+  <section class="sheet" id="sheet" aria-labelledby="sheet-title" inert>
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <div class="sheet-head">
+      <h2 id="sheet-title">個人資料</h2>
+      <button class="icon-btn" type="button" id="btn-sheet-close" data-icon="close" aria-label="收合個人資料"></button>
+    </div>
+    <div class="sheet-body" id="sheet-body"></div>
+  </section>
+
+  <!-- 股票 -->
+  <dialog class="modal modal-wide" id="dlg-stock" aria-labelledby="dlg-stock-title">
+    <div class="modal-head">
+      <h2 id="dlg-stock-title">股票市場</h2>
+      <button class="icon-btn" type="button" data-close data-icon="close" aria-label="關閉"></button>
+    </div>
+    <div class="modal-body" id="stock-body"></div>
+  </dialog>
+
+  <!-- 歷史事件 -->
+  <dialog class="modal" id="dlg-history" aria-labelledby="dlg-history-title">
+    <div class="modal-head">
+      <h2 id="dlg-history-title">歷史事件</h2>
+      <button class="icon-btn" type="button" data-close data-icon="close" aria-label="關閉"></button>
+    </div>
+    <div class="modal-body">
+      <div class="tabs" role="group" aria-label="篩選事件">
+        <button class="btn btn-sm btn-ghost" type="button" data-filter="all" aria-pressed="true">全部</button>
+        <button class="btn btn-sm btn-ghost" type="button" data-filter="market" aria-pressed="false">市場波動</button>
+        <button class="btn btn-sm btn-ghost" type="button" data-filter="life" aria-pressed="false">人生事件</button>
+      </div>
+      <ol class="event-list" id="event-list"></ol>
+    </div>
+  </dialog>
+
+  <script src="js/storage.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/events.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>

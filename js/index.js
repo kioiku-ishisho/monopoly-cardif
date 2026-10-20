@@ -1,0 +1,110 @@
+/* 首頁：隨機職業、開始遊戲、選單彈窗 */
+(function () {
+  const { jobs, tips } = GameData;
+  const $ = (s) => document.querySelector(s);
+
+  UI.fillIcons();
+  UI.bindDialogs();
+
+  // ---- 職業 ----
+  let current = null;
+
+  function pickJob(excludeId) {
+    const pool = jobs.filter((j) => j.id !== excludeId);
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  function renderJob(job, animate) {
+    current = job;
+    const avatar = $('#avatar');
+    avatar.textContent = job.icon;
+    avatar.style.setProperty('--job-color', job.color);
+    $('#job-name').textContent = job.name;
+    $('#job-desc').textContent = job.desc;
+    $('#job-salary').textContent = UI.fmtMoney(job.salary);
+    if (animate) {
+      avatar.classList.remove('swap');
+      void avatar.offsetWidth; // 重新觸發動畫
+      avatar.classList.add('swap');
+      $('#job-live').textContent = `職業更換為${job.name}，月薪 ${job.salary.toLocaleString('zh-TW')} 元。`;
+    }
+  }
+
+  $('#btn-reroll').addEventListener('click', () => renderJob(pickJob(current && current.id), true));
+
+  $('#btn-start').addEventListener('click', () => {
+    Store.session.set('newGame', { jobId: current.id, startedAt: Date.now() });
+    Store.session.remove('lastResult');
+    location.href = 'game.html';
+  });
+
+  renderJob(pickJob(), false);
+
+  // ---- 歷史遊玩紀錄 ----
+  const END_LABEL = { bankrupt: '破產', death: '健康耗盡', maxAge: '壽終正寢' };
+
+  $('#dlg-history').addEventListener('beforeopen', () => {
+    const list = Store.getHistory();
+    const body = $('#history-body');
+    if (!list.length) {
+      body.innerHTML = '<p class="empty">還沒有任何紀錄，開始你的第一場人生吧！</p>';
+      return;
+    }
+    body.innerHTML = `
+      <div class="best-score"><span>個人最高分</span><strong>${Store.getBestScore()}</strong></div>
+      <ul class="history-list">
+        ${list.map((h) => `
+          <li class="history-item">
+            <span class="h-title">${UI.escape(h.jobName)}・${h.finalAge} 歲・${END_LABEL[h.endReason] || ''}</span>
+            <span class="h-meta">${new Date(h.endedAt).toLocaleString('zh-TW', { dateStyle: 'medium', timeStyle: 'short' })}・淨資產 ${UI.fmtMoney(h.netWorth)}</span>
+            <span class="h-score" aria-label="評分 ${h.score} 分">${h.score}<small>${UI.escape(h.grade)} 級</small></span>
+          </li>`).join('')}
+      </ul>`;
+  });
+
+  // ---- 歷史取得提示 ----
+  $('#dlg-tips').addEventListener('beforeopen', () => {
+    const owned = new Set(Store.getTips());
+    $('#tips-body').innerHTML = `
+      <p class="tip-progress">已解鎖 ${owned.size} / ${tips.length} 則理財提示</p>
+      <ul class="tip-list">
+        ${tips.map((t) => owned.has(t.id)
+          ? `<li class="tip-item"><h3>💡 ${UI.escape(t.title)}</h3><p>${UI.escape(t.text)}</p></li>`
+          : '<li class="tip-item locked"><h3>🔒 尚未解鎖</h3><p>完成遊戲並閱讀 AI 建議即可解鎖。</p></li>').join('')}
+      </ul>`;
+  });
+
+  // ---- 設定 ----
+  const form = $('#settings-form');
+  function loadSettings() {
+    const s = Store.getSettings();
+    form.lang.value = s.lang;
+    form.querySelector(`input[name="font"][value="${s.font}"]`).checked = true;
+    form.reduceMotion.checked = s.reduceMotion;
+    form.highContrast.checked = s.highContrast;
+  }
+  $('#dlg-settings').addEventListener('beforeopen', loadSettings);
+  form.addEventListener('change', () => {
+    Store.saveSettings({
+      lang: form.lang.value,
+      font: form.querySelector('input[name="font"]:checked').value,
+      reduceMotion: form.reduceMotion.checked,
+      highContrast: form.highContrast.checked,
+    });
+    UI.applySettings();
+  });
+  form.addEventListener('submit', (e) => e.preventDefault());
+
+  $('#btn-clear').addEventListener('click', async () => {
+    const ok = await UI.confirm({
+      title: '清除紀錄',
+      message: '確定要清除所有遊玩紀錄與已解鎖的提示嗎？此動作無法復原。',
+      okText: '清除',
+      danger: true,
+    });
+    if (ok) {
+      Store.clearAll();
+      UI.toast('已清除所有紀錄');
+    }
+  });
+})();
