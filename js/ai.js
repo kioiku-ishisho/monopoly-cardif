@@ -36,11 +36,12 @@
     const wealth = r.endReason === 'bankrupt' ? 0 : clamp((Math.log2(1 + wealthRatio) / Math.log2(1 + 20)) * 35, 0, 35);
     // 健康（15）
     const health = clamp((r.avgHealth / 100) * 15, 0, 15);
-    // 投資（10）
+    // 投資與風險管理（10）
     let invest = 0;
-    if (r.trades > 0) invest += 4;
-    if (r.distinctStocks >= 2) invest += 3;
-    if (r.realizedPnL > 0 || r.stockValue > 0) invest += 3;
+    if (r.trades > 0) invest += 3;
+    if (r.distinctStocks >= 2) invest += 2;
+    if (r.realizedPnL > 0 || r.stockValue > 0) invest += 2;
+    if (r.insured) invest += r.insuredStage === 'youth' ? 3 : 2;
     if (r.forcedSales > 0) invest -= 3;
     invest = clamp(invest, 0, 10);
     // 結局（10）
@@ -61,6 +62,10 @@
       r.trades
         ? `投資方面，你進行了 ${r.trades} 筆交易、接觸 ${r.distinctStocks} 檔標的，已實現損益 ${UI.fmtSigned(r.realizedPnL)}。`
         : '整場遊戲你沒有進行任何投資，資產完全依靠薪資累積。',
+      `人生中你遇到 ${r.fateCount || 0} 次命運，面對 ${(r.chanceAccepted || 0) + (r.chanceDeclined || 0)} 次機會時接受了 ${r.chanceAccepted || 0} 次；事件累積讓每月淨收入${(r.netIncomeAdj || 0) >= 0 ? '增加' : '減少'} ${money(Math.abs(r.netIncomeAdj || 0))}。`,
+      r.insured
+        ? `你有投保醫療險，共獲得 ${r.claims || 0} 次理賠、合計 ${money(r.claimTotal || 0)}。`
+        : '你一直沒有投保醫療險。',
       `平均健康指數為 ${r.avgHealth}，最低曾降到 ${r.minHealth}。`,
     ].join('');
 
@@ -75,14 +80,21 @@
     if (r.finalAge >= 65 && r.endReason !== 'bankrupt') decisions.push({ type: 'good', text: '成功撐到退休年齡，具備基本的長期規劃。' });
     if (r.endReason === 'bankrupt' && r.finalStage === 'elder') decisions.push({ type: 'bad', text: '退休後收入下降，資產不足以支撐晚年生活。' });
     if (r.avgHealth >= 80) decisions.push({ type: 'good', text: '健康維持良好，為人生打下穩固基礎。' });
+    if (r.insured && r.insuredStage === 'youth') decisions.push({ type: 'good', text: '年輕時就投保醫療險，用較低的保費取得長期保障。' });
+    if (r.claims > 0) decisions.push({ type: 'good', text: `保險發揮作用，${r.claims} 次理賠共減少 ${money(r.claimTotal)} 的損失。` });
+    const uninsured = (r.log || []).filter((l) => l.category === 'uninsured-loss').length;
+    if (uninsured >= 2) decisions.push({ type: 'bad', text: `有 ${uninsured} 次醫療相關支出都是自掏腰包，缺少保險保障。` });
+    if (r.netIncomeAdj < 0) decisions.push({ type: 'bad', text: `各種事件讓每月淨收入減少了 ${money(-r.netIncomeAdj)}，長期開銷要特別留意。` });
+    if (r.netIncomeAdj > 0) decisions.push({ type: 'good', text: `透過進修、加薪等選擇，每月淨收入提高了 ${money(r.netIncomeAdj)}。` });
     // 附上玩家實際做過的幾筆重要決策
-    const notable = (r.log || []).filter((l) => l.category !== 'milestone').slice(-4);
+    const notable = (r.log || []).filter((l) => !['milestone', 'uninsured-loss'].includes(l.category)).slice(-4);
     notable.forEach((l) => decisions.push({ type: 'info', text: `${l.age} 歲：${l.text}` }));
     if (!decisions.length) decisions.push({ type: 'info', text: '這局的決策紀錄不多，下次試著多做一些財務選擇吧！' });
 
     // ---- 建議（每則對應一個可解鎖的提示） ----
     const advice = [];
     if (r.endReason === 'bankrupt' || r.forcedSales > 0) advice.push({ tip: 'emergency', text: '先建立 3～6 個月生活費的緊急預備金，再考慮投資，才不會在急需用錢時被迫賣出資產。' });
+    if (!r.insured || uninsured >= 2) advice.push({ tip: 'insurance', text: '在保險格及早投保醫療險，用固定的小額保費轉嫁「付不起」的醫療風險。' });
     if (r.trades === 0) advice.push({ tip: 'compound', text: '試著及早開始投資，讓複利替你工作；即使每次金額不大，時間會放大效果。' });
     if (r.distinctStocks <= 1) advice.push({ tip: 'diversify', text: '把資金分散到不同風險的標的，例如 ETF 搭配穩健的金融股，降低波動。' });
     if (r.realizedPnL < 0) advice.push({ tip: 'panic', text: '市場下跌時先冷靜評估，避免恐慌性賣出把帳面損失變成真正損失。' });

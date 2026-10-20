@@ -55,11 +55,12 @@
 .board-viewport:focus-visible { outline-offset: -4px; }
 
 .board {
-  --tile: 120px;
+  --tile: 96px;
+  --grid: 16;
   position: absolute;
   left: 0; top: 0;
-  width: calc(var(--tile) * 6);
-  height: calc(var(--tile) * 6);
+  width: calc(var(--tile) * var(--grid));
+  height: calc(var(--tile) * var(--grid));
   transform-origin: 0 0;
   border-radius: 24px;
   background: var(--surface-2);
@@ -77,16 +78,16 @@
   position: absolute;
   inset: 0;
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  grid-template-rows: repeat(6, 1fr);
+  grid-template-columns: repeat(var(--grid), 1fr);
+  grid-template-rows: repeat(var(--grid), 1fr);
 }
 .tile {
   --tile-color: #868e96;
-  margin: 4px;
-  border-radius: 14px;
+  margin: 3px;
+  border-radius: 12px;
   background: var(--surface);
   border: 2px solid var(--tile-color);
-  border-top-width: 10px;
+  border-top-width: 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -97,32 +98,23 @@
   padding: 4px;
 }
 .tile.corner { background: color-mix(in srgb, var(--tile-color) 14%, var(--surface)); }
-.tile-icon { font-size: 34px; line-height: 1; }
-.tile-name { font-weight: 700; font-size: 15px; }
+.tile-icon { font-size: 30px; line-height: 1; }
+.tile-name { font-weight: 700; font-size: 14px; }
+.tile.corner .tile-icon { font-size: 40px; }
 .tile-no { position: absolute; top: 2px; left: 8px; font-size: 11px; color: var(--text-muted); }
 .tile.current { box-shadow: 0 0 0 4px var(--stage); }
 
 .tile[data-type="start"] { --tile-color: #2f9e44; }
 .tile[data-type="rest"] { --tile-color: #a07d5c; }
-.tile[data-type="hospital"] { --tile-color: #e03131; }
-.tile[data-type="travel"] { --tile-color: #1098ad; }
 .tile[data-type="chance"] { --tile-color: #f59f00; }
 .tile[data-type="fate"] { --tile-color: #7048e8; }
-.tile[data-type="work"] { --tile-color: #1c7ed6; }
-.tile[data-type="health"] { --tile-color: #37b24d; }
-.tile[data-type="invest"] { --tile-color: #c2255c; }
-.tile[data-type="expense"] { --tile-color: #e8590c; }
-.tile[data-type="insurance"] { --tile-color: #3b5bdb; }
-.tile[data-type="family"] { --tile-color: #d6336c; }
-.tile[data-type="learn"] { --tile-color: #0ca678; }
-.tile[data-type="house"] { --tile-color: #9c6644; }
-.tile[data-type="retire"] { --tile-color: #862e9c; }
+.tile[data-type="insurance"] { --tile-color: #1c7ed6; }
 
 .board-center {
   position: absolute;
   left: var(--tile); top: var(--tile);
-  width: calc(var(--tile) * 4);
-  height: calc(var(--tile) * 4);
+  width: calc(var(--tile) * (var(--grid) - 2));
+  height: calc(var(--tile) * (var(--grid) - 2));
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -131,9 +123,28 @@
   text-align: center;
   pointer-events: none;
 }
-.center-stage { font-size: 64px; font-weight: 900; color: var(--stage); letter-spacing: 0.15em; line-height: 1.1; }
-.center-age { font-size: 22px; font-weight: 700; color: var(--text-muted); }
-.center-lap { font-size: 18px; color: var(--text-muted); }
+.center-stage { font-size: 200px; font-weight: 900; color: var(--stage); letter-spacing: 0.15em; line-height: 1.1; opacity: 0.85; }
+.center-age { font-size: 64px; font-weight: 700; color: var(--text-muted); }
+.center-lap { font-size: 40px; color: var(--text-muted); }
+.center-legend { display: flex; gap: 28px; margin-top: 24px; font-size: 32px; font-weight: 700; color: var(--text-muted); }
+
+/* ===== 事件牌 ===== */
+.event-card {
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--card-color, var(--border));
+  background: color-mix(in srgb, var(--card-color, var(--surface-2)) 10%, var(--surface));
+  padding: 16px;
+}
+.event-card[data-kind="chance"] { --card-color: #f59f00; }
+.event-card[data-kind="fate"] { --card-color: #7048e8; }
+.event-card[data-kind="insurance"] { --card-color: #1c7ed6; }
+.card-kind { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-weight: 900; }
+.card-id { font-size: 0.8rem; color: var(--text-muted); font-weight: 500; }
+.card-text { font-size: 1.1rem; font-weight: 700; margin-bottom: 12px; }
+.effect-list { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; padding: 0 !important; margin: 0 !important; }
+.effect-list li { margin: 0 !important; padding: 4px 12px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); font-weight: 700; }
+.card-note { margin: 12px 0 0; color: var(--text-muted); font-size: 0.9rem; }
+.card-note.warn { color: var(--danger); font-weight: 700; }
 
 .token {
   position: absolute;

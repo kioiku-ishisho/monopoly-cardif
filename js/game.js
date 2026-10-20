@@ -20,6 +20,9 @@
     lap: 0, // 已完成圈數
     stageIndex: 0,
     turn: 0,
+    netIncomeAdj: 0, // 事件牌造成的每月淨收入增減（持續）
+    insurance: null, // { premium, stage } 投保中的醫療險
+    gameId: null, // 伺服器端的遊戲 id，用來抽牌
     holdings: {}, // { 股票id: { shares, cost } }
     market: D.stocks.map((s) => ({ ...s, prev: s.price, history: [s.price] })),
     history: [],
@@ -37,6 +40,11 @@
     boughtIds: new Set(),
     realizedPnL: 0,
     forcedSales: 0,
+    chanceAccepted: 0,
+    chanceDeclined: 0,
+    fateCount: 0,
+    claims: 0,
+    claimTotal: 0,
   };
 
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -44,6 +52,8 @@
   const age = () => E.startAge + (state.steps * E.monthsPerStep) / 12;
   const ageInt = () => Math.floor(age());
   const monthlyIncome = () => Math.round(job.salary * E.incomeRate[stage().id]);
+  const premium = () => (state.insurance ? state.insurance.premium : 0);
+  const monthlyNet = () => monthlyIncome() - job.expense + state.netIncomeAdj - premium();
   const stockValue = () => state.market.reduce((sum, s) => sum + (state.holdings[s.id]?.shares || 0) * s.price, 0);
   const netWorth = () => state.cash + stockValue();
 
@@ -70,20 +80,26 @@
   }
 
   // ===== 地圖 =====
-  const TILE_PX = 120;
+  const TILE_PX = 96;
+  const SIDE = E.tilesPerLap / 4; // 每邊格數（不含下一個角落）
+  const GRID = SIDE + 1; // 地圖為 GRID × GRID 的方格
   const tilesEl = $('#tiles');
   const token = $('#token');
+  setBoardGrid();
+
+  function setBoardGrid() {
+    const b = $('#board');
+    b.style.setProperty('--tile', TILE_PX + 'px');
+    b.style.setProperty('--grid', GRID);
+  }
 
   // 0 號格在右下角，逆時針前進
   function tileCell(i) {
-    if (i === 0) return { r: 5, c: 5 };
-    if (i < 5) return { r: 5, c: 5 - i };
-    if (i === 5) return { r: 5, c: 0 };
-    if (i < 10) return { r: 5 - (i - 5), c: 0 };
-    if (i === 10) return { r: 0, c: 0 };
-    if (i < 15) return { r: 0, c: i - 10 };
-    if (i === 15) return { r: 0, c: 5 };
-    return { r: i - 15, c: 5 };
+    const n = SIDE;
+    if (i < n) return { r: n, c: n - i }; // 下排，右 → 左
+    if (i < 2 * n) return { r: n - (i - n), c: 0 }; // 左排，下 → 上
+    if (i < 3 * n) return { r: 0, c: i - 2 * n }; // 上排，左 → 右
+    return { r: i - 3 * n, c: n }; // 右排，上 → 下
   }
 
   function boardTiles() {
@@ -95,7 +111,7 @@
     document.body.dataset.stage = stage().id;
     tilesEl.innerHTML = boardTiles().map((t) => {
       const { r, c } = tileCell(t.index);
-      const corner = t.index % 5 === 0;
+      const corner = t.index % SIDE === 0;
       return `<li class="tile${corner ? ' corner' : ''}" data-type="${t.type}" data-index="${t.index}"
                 style="grid-row:${r + 1};grid-column:${c + 1}">
         <span class="tile-no" aria-hidden="true">${t.index + 1}</span>
@@ -135,9 +151,10 @@
   // ===== 地圖拖曳 / 縮放 =====
   const vp = $('#board-viewport');
   const board = $('#board');
-  const BOARD_PX = TILE_PX * 6;
-  const MIN_S = 0.3;
-  const MAX_S = 2.5;
+  const BOARD_PX = TILE_PX * GRID;
+  const MIN_S = 0.12;
+  const MAX_S = 2;
+  const READABLE_S = 0.5; // 小螢幕整張地圖放不下時，改用此倍率並跟著棋子
   const view = { x: 0, y: 0, s: 1 };
   let userMoved = false;
 
@@ -151,6 +168,11 @@
     // 預留骰子按鈕的空間
     const usableH = Math.max(200, r.height - 150);
     view.s = clamp(Math.min(r.width / BOARD_PX, usableH / BOARD_PX) * 0.94, MIN_S, MAX_S);
+    if (view.s < READABLE_S * 0.8) {
+      view.s = READABLE_S;
+      centerOnToken(animate);
+      return;
+    }
     view.x = (r.width - BOARD_PX * view.s) / 2;
     view.y = Math.max(8, (usableH - BOARD_PX * view.s) / 2);
     applyView(animate);
@@ -174,8 +196,11 @@
   function centerOnToken(animate) {
     const r = vp.getBoundingClientRect();
     const { x, y } = tokenCenter();
-    view.x = r.width / 2 - x * view.s;
-    view.y = (r.height - 150) / 2 - y * view.s;
+    const size = BOARD_PX * view.s;
+    // 地圖比畫面大時，避免邊緣外露出空白
+    const clampAxis = (v, viewport) => (size > viewport ? clamp(v, viewport - size, 0) : v);
+    view.x = clampAxis(r.width / 2 - x * view.s, r.width);
+    view.y = clampAxis((r.height - 150) / 2 - y * view.s, r.height - 150); // 底部留給骰子
     applyView(animate);
   }
 
@@ -270,7 +295,9 @@
     $('#board-center').innerHTML = `
       <div class="center-stage">${stage().name}</div>
       <div class="center-age">${ageInt()} 歲</div>
-      <div class="center-lap">第 ${state.lap + 1} 圈・每圈 ${E.yearsPerLap} 年</div>`;
+      <div class="center-lap">第 ${state.lap + 1} 圈・每圈 ${E.yearsPerLap} 年・一格 ${E.monthsPerStep} 個月</div>
+      <div class="center-legend">${['chance', 'fate', 'insurance', 'rest'].map((t) =>
+        `<span>${D.tileTypes[t].icon} ${D.tileTypes[t].name} ${D.boardCounts[stage().id][t]}</span>`).join('')}</div>`;
     if ($('#sheet').classList.contains('open')) renderSheet();
   }
 
@@ -295,8 +322,11 @@
 
   function renderSheet() {
     const income = monthlyIncome();
-    const net = income - job.expense;
+    const net = monthlyNet();
     const rows = state.market.filter((s) => state.holdings[s.id]?.shares);
+    const ins = state.insurance
+      ? `${D.insurance.name}（${UI.fmtMoney(state.insurance.premium)}/月）`
+      : '未投保';
     $('#sheet-body').innerHTML = `
       <dl class="info-grid">
         <div><dt>職業</dt><dd>${job.icon} ${UI.escape(job.name)}</dd></div>
@@ -304,6 +334,8 @@
         <div><dt>人生階段</dt><dd>${stage().name}</dd></div>
         <div><dt>${stage().id === 'elder' ? '每月退休金' : '每月收入'}</dt><dd>${UI.fmtMoney(income)}</dd></div>
         <div><dt>每月生活費</dt><dd>${UI.fmtMoney(job.expense)}</dd></div>
+        <div><dt>事件造成的淨收入變化</dt><dd class="${state.netIncomeAdj >= 0 ? 'pos' : 'neg'}">${UI.fmtSigned(state.netIncomeAdj)}/月</dd></div>
+        <div><dt>保險</dt><dd>${ins}</dd></div>
         <div><dt>每月結餘</dt><dd class="${net >= 0 ? 'pos' : 'neg'}">${UI.fmtSigned(net)}</dd></div>
         <div><dt>現金</dt><dd>${UI.fmtMoney(state.cash)}</dd></div>
         <div><dt>股票市值</dt><dd>${UI.fmtMoney(stockValue())}</dd></div>
@@ -333,12 +365,14 @@
     return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
   }
 
-  function marketTick() {
-    const news = Math.random() < 0.18 ? D.marketNews[Math.floor(Math.random() * D.marketNews.length)] : null;
+  // 股票參數以「一年」為單位，依本回合經過的月數換算
+  function marketTick(months) {
+    const dt = months / 12;
+    const news = Math.random() < 0.18 * dt ? D.marketNews[Math.floor(Math.random() * D.marketNews.length)] : null;
     let total = 0;
     state.market.forEach((s) => {
       s.prev = s.price;
-      const r = s.drift + gaussian() * s.vol + (news ? news.effect * s.beta : 0);
+      const r = s.drift * dt + gaussian() * s.vol * Math.sqrt(dt) + (news ? news.effect * s.beta : 0);
       s.price = Math.max(1, Math.round(s.price * (1 + r) * 100) / 100);
       s.history.push(s.price);
       if (s.history.length > 40) s.history.shift();
@@ -485,6 +519,32 @@
       actions: options.map((o, i) => ({ label: o.label, value: o.value, variant: i === 0 ? 'primary' : 'ghost' })).reverse(),
       dismissible: false,
     }),
+    // 一次套用多種影響，只記一筆歷史事件；effects: { cash, netIncome, health }
+    applyEffects({ cash = 0, netIncome = 0, health = 0 }, reason, icon = '🎲') {
+      state.cash = Math.round(state.cash + cash);
+      state.netIncomeAdj = Math.round(state.netIncomeAdj + netIncome);
+      state.health = clamp(Math.round(state.health + health), 0, 100);
+      const parts = [];
+      if (cash) parts.push(`現金 ${UI.fmtSigned(cash)}`);
+      if (netIncome) parts.push(`淨收入 ${UI.fmtSigned(netIncome)}/月`);
+      if (health) parts.push(`健康 ${health > 0 ? '+' : ''}${health}`);
+      addHistory('life', icon, parts.length ? `${reason}（${parts.join('、')}）` : reason);
+      renderStatus();
+    },
+    addNetIncome(n, reason) {
+      state.netIncomeAdj = Math.round(state.netIncomeAdj + n);
+      addHistory('life', n >= 0 ? '📈' : '📉', `${reason}（淨收入 ${UI.fmtSigned(n)}/月）`);
+      renderStatus();
+    },
+    buyInsurance() {
+      state.insurance = { premium: D.insurance.premium[stage().id], stage: stage().id };
+      addHistory('life', '🛡️', `投保${D.insurance.name}（保費 ${UI.fmtMoney(state.insurance.premium)}/月）`);
+      logDecision(`${ageInt()} 歲投保${D.insurance.name}，每月 ${UI.fmtMoney(state.insurance.premium)}`, 'insurance');
+      renderStatus();
+    },
+    stageId: () => stage().id,
+    gameId: () => state.gameId,
+    stats,
     alert: (opts) => UI.alert(opts),
     logDecision,
   };
@@ -550,7 +610,7 @@
       await waitIfPaused();
       state.position = (state.position + 1) % E.tilesPerLap;
       state.steps++;
-      state.cash += (monthlyIncome() - job.expense) * E.monthsPerStep;
+      state.cash += monthlyNet() * E.monthsPerStep;
       if (state.position === 0) await passStart();
       placeToken(true);
       renderStatus();
@@ -559,8 +619,8 @@
     ensureTokenVisible();
 
     const tile = currentTile();
-    announce(`擲出 ${n} 點，來到「${tile.name}」・薪資收支 ${UI.fmtSigned(state.cash - before)}`);
-    marketTick();
+    announce(`擲出 ${n} 點，來到「${tile.name}」・${n * E.monthsPerStep} 個月收支 ${UI.fmtSigned(state.cash - before)}`);
+    marketTick(n * E.monthsPerStep);
     await waitIfPaused();
     await (TileEvents[tile.type] || TileEvents.default)(tile, ctx);
 
@@ -630,6 +690,14 @@
       distinctStocks: stats.boughtIds.size,
       realizedPnL: Math.round(stats.realizedPnL),
       forcedSales: stats.forcedSales,
+      netIncomeAdj: state.netIncomeAdj,
+      insured: !!state.insurance,
+      insuredStage: state.insurance ? state.insurance.stage : null,
+      chanceAccepted: stats.chanceAccepted,
+      chanceDeclined: stats.chanceDeclined,
+      fateCount: stats.fateCount,
+      claims: stats.claims,
+      claimTotal: Math.round(stats.claimTotal),
       holdings: state.market.filter((s) => state.holdings[s.id]).map((s) => ({ id: s.id, name: s.name, shares: state.holdings[s.id].shares, value: Math.round(state.holdings[s.id].shares * s.price) })),
       log: state.log.slice(-100),
       history: state.history.slice(-60),
@@ -686,4 +754,16 @@
   buildBoard();
   requestAnimationFrame(() => fitBoard(false));
   announce('');
+
+  // 向伺服器建立本局，之後的抽牌都以此 id 避免重複
+  setDiceEnabled(false);
+  API.createGame(job.id)
+    .then((id) => { state.gameId = id; })
+    .catch(async () => {
+      await UI.alert({
+        title: '無法連線事件資料庫',
+        message: '機會與命運牌需要伺服器。請在專案資料夾執行「python server.py」後重新整理；目前仍可遊玩，但抽不到牌。',
+      });
+    })
+    .finally(() => setDiceEnabled(true));
 })();

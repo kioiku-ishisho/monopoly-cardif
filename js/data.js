@@ -13,11 +13,11 @@
     { id: 'doctor', name: '醫師', icon: '🧑‍⚕️', color: '#087f5b', salary: 120000, expense: 60000, desc: '高收入也高壓力，生活開銷高。' },
   ];
 
-  // 一圈 = 20 格 = 5 年，因此一格 = 3 個月
+  // 一圈 = 60 格 = 5 年，因此一格 = 1 個月
   const economy = {
-    tilesPerLap: 20,
+    tilesPerLap: 60,
     yearsPerLap: 5,
-    monthsPerStep: 3,
+    monthsPerStep: 1,
     startAge: 25,
     startCashMonths: 3, // 起始現金 = 月薪 × 3
     maxAge: 100, // 到達此年齡時遊戲以「壽終正寢」結束
@@ -36,34 +36,57 @@
 
   const tileTypes = {
     start: { name: '起點', icon: '🏁' },
-    rest: { name: '休息站', icon: '☕' },
-    hospital: { name: '醫院', icon: '🏥' },
-    travel: { name: '旅遊', icon: '✈️' },
-    chance: { name: '機會', icon: '❓' },
-    fate: { name: '命運', icon: '🎴' },
-    work: { name: '職場', icon: '💼' },
-    health: { name: '健康', icon: '🩺' },
-    invest: { name: '投資', icon: '📈' },
-    expense: { name: '消費', icon: '🛍️' },
-    insurance: { name: '保險', icon: '🛡️' },
-    family: { name: '家庭', icon: '👪' },
-    learn: { name: '進修', icon: '📚' },
-    house: { name: '住房', icon: '🏠' },
-    retire: { name: '退休規劃', icon: '🧓' },
+    chance: { name: '機會', icon: '❓' }, // 抽機會牌，可選擇接受或放棄
+    fate: { name: '命運', icon: '🎴' }, // 抽命運牌，抽到即發生
+    insurance: { name: '保險', icon: '🛡️' }, // 可投保醫療險
+    rest: { name: '休息', icon: '☕' }, // 什麼事都沒發生
   };
 
-  // 每圈 20 格；第 0、5、10、15 格為四個角落
-  // 事件內容待補，請到 js/events.js 撰寫
-  const boards = {
-    youth: ['start', 'work', 'chance', 'expense', 'learn', 'rest', 'invest', 'fate', 'house', 'work',
-      'hospital', 'family', 'chance', 'insurance', 'expense', 'travel', 'invest', 'fate', 'learn', 'health'],
-    middle: ['start', 'work', 'house', 'chance', 'family', 'rest', 'invest', 'insurance', 'fate', 'expense',
-      'hospital', 'family', 'chance', 'work', 'health', 'travel', 'invest', 'fate', 'expense', 'insurance'],
-    elder: ['start', 'health', 'retire', 'chance', 'family', 'rest', 'invest', 'insurance', 'fate', 'health',
-      'hospital', 'family', 'chance', 'expense', 'retire', 'travel', 'invest', 'fate', 'health', 'insurance'],
+  // 每圈各類格子數量（合計 60）；休息含 3 個角落
+  const boardCounts = {
+    youth: { start: 1, chance: 26, fate: 16, insurance: 10, rest: 7 },
+    middle: { start: 1, chance: 24, fate: 18, insurance: 9, rest: 8 },
+    elder: { start: 1, chance: 19, fate: 24, insurance: 6, rest: 10 },
   };
 
-  // vol：每回合波動度；drift：每回合平均漲幅；beta：對市場新聞的敏感度
+  // 角落為第 0、15、30、45 格：起點 + 3 個休息角落；其餘格子依比例平均分散排列
+  function layoutBoard(counts, tiles = economy.tilesPerLap) {
+    const side = tiles / 4;
+    const board = new Array(tiles);
+    board[0] = 'start';
+    for (let i = side; i < tiles; i += side) board[i] = 'rest';
+    const remaining = { chance: counts.chance, fate: counts.fate, insurance: counts.insurance, rest: counts.rest - 3 };
+    const slots = tiles - 4;
+    const used = { chance: 0, fate: 0, insurance: 0, rest: 0 };
+    let k = 0;
+    for (let i = 0; i < tiles; i++) {
+      if (board[i]) continue;
+      k++;
+      // 選出目前「落後目標進度」最多的類型
+      let best = null;
+      let bestLag = -Infinity;
+      for (const t of Object.keys(remaining)) {
+        if (used[t] >= remaining[t]) continue;
+        const lag = (remaining[t] * k) / slots - used[t];
+        if (lag > bestLag) { bestLag = lag; best = t; }
+      }
+      board[i] = best;
+      used[best]++;
+    }
+    return board;
+  }
+
+  const boards = Object.fromEntries(Object.entries(boardCounts).map(([stage, c]) => [stage, layoutBoard(c)]));
+
+  // 醫療險：在保險格投保，保費依投保時的人生階段固定（越早投保越便宜）
+  // 投保後，同時造成「現金減少」與「健康下降」的命運牌，現金損失由保險理賠 coverRate
+  const insurance = {
+    name: '醫療險',
+    premium: { youth: 1200, middle: 2800, elder: 6000 },
+    coverRate: 0.8,
+  };
+
+  // vol：年化波動度；drift：年平均漲幅；beta：對市場新聞的敏感度
   const stocks = [
     { id: 'ETF50', name: '台灣50 ETF', price: 150, vol: 0.06, drift: 0.012, beta: 1 },
     { id: 'BANK', name: '穩健金控', price: 28, vol: 0.04, drift: 0.006, beta: 0.6 },
@@ -93,5 +116,5 @@
     { id: 'panic', title: '別在恐慌時賣出', text: '市場大跌時恐慌賣出，往往把帳面虧損變成真正的虧損。' },
   ];
 
-  window.GameData = { jobs, economy, stages, tileTypes, boards, stocks, marketNews, tips };
+  window.GameData = { jobs, economy, stages, tileTypes, boardCounts, boards, insurance, stocks, marketNews, tips };
 })();
