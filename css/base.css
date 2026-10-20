@@ -196,7 +196,8 @@ dialog.modal {
   overflow: hidden;
 }
 dialog.modal[open] { display: flex; flex-direction: column; animation: pop-in 0.18s ease-out; }
-dialog.modal > form { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+/* 用 flex-basis: auto，避免 Safari 在只有 max-height 時把 0% 基準算成高度 0 */
+dialog.modal > form { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
 dialog.modal::backdrop { background: rgba(30, 20, 10, 0.55); }
 .modal-head {
   display: flex;
@@ -207,7 +208,7 @@ dialog.modal::backdrop { background: rgba(30, 20, 10, 0.55); }
   border-bottom: 1px solid var(--border);
 }
 .modal-head h2 { font-size: 1.25rem; }
-.modal-body { padding: 18px 22px; overflow-y: auto; flex: 1; }
+.modal-body { padding: 18px 22px; overflow-y: auto; flex: 1 1 auto; min-height: 0; -webkit-overflow-scrolling: touch; }
 .modal-body ol, .modal-body ul { padding-left: 1.3em; margin: 0 0 0.75em; }
 .modal-body li { margin-bottom: 0.35em; }
 .modal-actions {
