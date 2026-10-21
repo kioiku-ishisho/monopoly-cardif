@@ -47,6 +47,20 @@
   };
   Store.getBestScore = () => Store.getHistory().reduce((best, h) => Math.max(best, h.score || 0), 0);
 
+  // 匿名玩家 id：用來在全服排行榜記錄「自己的最高分」
+  Store.getPlayerId = () => {
+    let id = Store.get('playerId');
+    if (!id || !/^[0-9a-f-]{36}$/.test(id)) {
+      id = crypto.randomUUID ? crypto.randomUUID()
+        : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+          const r = (Math.random() * 16) | 0;
+          return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+        });
+      Store.set('playerId', id);
+    }
+    return id;
+  };
+
   Store.getTips = () => Store.get('tips', []);
   // 回傳本次新解鎖的提示 id
   Store.unlockTips = (ids) => {

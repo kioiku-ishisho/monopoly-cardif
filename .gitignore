@@ -1,3 +1,8 @@
-db/game.db
-db/game.db-journal
-__pycache__/
+node_modules/
+.vercel/
+.env
+.env.*
+!.env.example
+.firebase/
+firebase-debug.log
+*-service-account*.json

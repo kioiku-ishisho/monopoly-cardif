@@ -21,7 +21,7 @@
 
     <div id="loading" class="loading" role="status">
       <div class="spinner" aria-hidden="true"></div>
-      <p>AI 正在分析你的人生…</p>
+      <p>AI 正在分析你的人生…<br><small>約需 20～60 秒</small></p>
     </div>
 
     <div id="content" hidden>
@@ -34,6 +34,7 @@
               <span class="score-grade" id="score-grade"></span>
             </div>
           </div>
+          <p class="score-source" id="score-source"></p>
         </section>
 
         <section class="card rank-card" aria-labelledby="rank-title">
@@ -78,6 +79,7 @@
   <script src="js/storage.js"></script>
   <script src="js/data.js"></script>
   <script src="js/ui.js"></script>
+  <script src="js/api.js"></script>
   <script src="js/ai.js"></script>
   <script src="js/result.js"></script>
 </body>

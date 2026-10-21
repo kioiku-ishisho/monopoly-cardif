@@ -18,9 +18,10 @@
 
   (async () => {
     // 重新整理頁面時沿用同一份評分
-    const evaluation = record.evaluation || await AI.evaluate(record);
-    if (!record.evaluation) {
-      record.evaluation = evaluation;
+    const result = record.result || await AI.evaluate(record);
+    const { evaluation } = result;
+    if (!record.result) {
+      record.result = result;
       Store.session.set('lastResult', record);
       Store.addHistory({
         id: record.id,
@@ -33,13 +34,11 @@
         endedAt: record.endedAt,
       });
     }
-    const best = Store.getBestScore();
-    const rank = await AI.getGlobalRank(best);
     const fresh = Store.unlockTips(evaluation.advice.map((a) => a.tip).filter(Boolean));
-    render(evaluation, best, rank, fresh);
+    render(evaluation, result.rank, result.offlineReason, fresh);
   })();
 
-  function render(ev, best, rank, freshTips) {
+  function render(ev, rank, offlineReason, freshTips) {
     $('#loading').hidden = true;
     $('#content').hidden = false;
     main.setAttribute('aria-busy', 'false');
@@ -49,11 +48,18 @@
     ring.setAttribute('aria-label', `AI 評分 ${ev.score} 分（滿分 100），等級 ${ev.grade}`);
     $('#score-grade').textContent = `${ev.grade} 級`;
     animateScore(ev.score);
+    $('#score-source').textContent = ev.source === 'claude' ? '由 Claude 評分' : '本機規則評分';
 
-    // 排名
-    $('#rank-big').textContent = `第 ${rank.rank.toLocaleString('zh-TW')} 名`;
-    $('#rank-sub').textContent = `個人最高分 ${best} 分・前 ${rank.topPercent}%（共 ${rank.total.toLocaleString('zh-TW')} 位玩家）`;
-    $('#rank-note').textContent = rank.simulated ? '＊目前為模擬排名，接上伺服器後顯示真實全服排名' : '';
+    // 排名（以個人最高分計算）
+    if (rank) {
+      $('#rank-big').textContent = `第 ${rank.rank.toLocaleString('zh-TW')} 名`;
+      $('#rank-sub').textContent = `個人最高分 ${rank.best} 分・前 ${rank.topPercent}%（共 ${rank.total.toLocaleString('zh-TW')} 位玩家）`;
+      $('#rank-note').textContent = '';
+    } else {
+      $('#rank-big').textContent = '未列入排名';
+      $('#rank-sub').textContent = `本機最高分 ${Store.getBestScore()} 分`;
+      $('#rank-note').textContent = `＊${offlineReason}，本局改用本機評分，不列入全服排行榜`;
+    }
 
     // 數據
     const stats = [

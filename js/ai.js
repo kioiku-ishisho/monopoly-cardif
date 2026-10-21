@@ -1,19 +1,10 @@
 /*
  * AI 評分與全服排名
  *
- * 目前為「本機規則版」：依遊戲紀錄計算分數並組出總結與建議，不需要網路。
- * 要接上真正的 AI（例如 Claude API）時：
- *   1. 架一個後端 API，接收遊戲紀錄、呼叫 LLM，回傳 { score, grade, summary, decisions, advice }
- *      （API 金鑰務必放在後端，不可寫在前端程式碼）
- *   2. 把下方 AI_CONFIG.evaluateEndpoint 設為該網址
- * 排名同理：設定 AI_CONFIG.rankEndpoint 後會改用伺服器回傳的排名。
+ * 正常情況：呼叫 /api/evaluate，由伺服器端的 Claude 評分，並寫入 Firestore 全服排行榜。
+ * 無法連線（直接開啟檔案、API 失敗、超過每日次數）時：改用下方的本機規則評分，不列入排行榜。
  */
 (function () {
-  const AI_CONFIG = {
-    evaluateEndpoint: '', // 例如 'https://your-server.example.com/api/evaluate'
-    rankEndpoint: '', // 例如 'https://your-server.example.com/api/rank'
-  };
-
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   const money = (n) => UI.fmtMoney(n);
 
@@ -106,47 +97,25 @@
     return { score, grade, summary, decisions, advice: advice.slice(0, 5), breakdown: { longevity, wealth, health, invest, ending }, source: 'local' };
   }
 
-  async function postJSON(url, body) {
-    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    return res.json();
-  }
+  const OFFLINE_REASON = {
+    ai_unavailable: 'AI 評分服務暫時無法使用',
+    daily_limit: '今天的 AI 評分次數已達上限',
+    game_not_found: '找不到這局的伺服器紀錄',
+  };
 
+  // 回傳 { evaluation, rank, offlineReason }；rank 為 null 代表沒有列入全服排行榜
   async function evaluate(record) {
-    if (AI_CONFIG.evaluateEndpoint) {
+    if (record.gameId) {
       try {
-        return Object.assign({ source: 'remote' }, await postJSON(AI_CONFIG.evaluateEndpoint, record));
+        const { evaluation, rank } = await API.evaluate(record.gameId, record);
+        return { evaluation, rank, offlineReason: null };
       } catch (e) {
-        console.warn('AI 服務連線失敗，改用本機評分', e);
+        console.warn('AI 評分失敗，改用本機評分', e);
+        return { evaluation: localEvaluate(record), rank: null, offlineReason: OFFLINE_REASON[e.code] || '無法連線伺服器' };
       }
     }
-    await UI.wait(900); // 模擬分析時間
-    return localEvaluate(record);
+    return { evaluation: localEvaluate(record), rank: null, offlineReason: '遊戲開始時未連線伺服器' };
   }
 
-  // 標準常態分布累積函數（近似）
-  function normCdf(z) {
-    const t = 1 / (1 + 0.2316419 * Math.abs(z));
-    const d = 0.3989423 * Math.exp((-z * z) / 2);
-    const p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
-    return z > 0 ? 1 - p : p;
-  }
-
-  // 回傳 { rank, total, topPercent, simulated }
-  async function getGlobalRank(bestScore) {
-    if (AI_CONFIG.rankEndpoint) {
-      try {
-        return Object.assign({ simulated: false }, await postJSON(AI_CONFIG.rankEndpoint, { score: bestScore }));
-      } catch (e) {
-        console.warn('排名服務連線失敗，改用模擬排名', e);
-      }
-    }
-    // 尚無伺服器：以假設的玩家分布（平均 55、標準差 16、共 12,840 人）模擬
-    const total = 12840;
-    const above = 1 - normCdf((bestScore - 55) / 16);
-    const rank = Math.max(1, Math.round(total * above));
-    return { rank, total, topPercent: Math.max(0.1, Math.round((rank / total) * 1000) / 10), simulated: true };
-  }
-
-  window.AI = { config: AI_CONFIG, evaluate, getGlobalRank };
+  window.AI = { evaluate };
 })();

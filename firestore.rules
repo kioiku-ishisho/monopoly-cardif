@@ -1,0 +1,11 @@
+rules_version = '2';
+
+// 所有讀寫都經由 Vercel API（firebase-admin 不受此規則限制），
+// 因此一律拒絕瀏覽器直接存取，避免玩家竄改牌組或排行榜。
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

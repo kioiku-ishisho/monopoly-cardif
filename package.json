@@ -1,0 +1,19 @@
+{
+  "name": "monopoly-cardif",
+  "private": true,
+  "type": "module",
+  "description": "人生富翁：Vercel 靜態網頁 + Serverless API（Firestore、Claude）",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "vercel dev",
+    "import-cards": "node scripts/import-cards.mjs",
+    "import-cards:dry": "node scripts/import-cards.mjs --dry-run",
+    "deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.137.0",
+    "firebase-admin": "^14.5.0"
+  }
+}

@@ -1,0 +1,7 @@
+.claude
+.env*
+docs
+scripts
+firebase.json
+firestore.rules
+firestore.indexes.json

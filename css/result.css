@@ -119,3 +119,6 @@
 .empty-state { text-align: center; }
 .home-wrap { display: flex; justify-content: center; margin-top: 8px; }
 .home-wrap .btn { width: min(360px, 100%); }
+
+.score-source { margin: 10px 0 0; color: var(--text-muted); font-size: 0.85rem; font-weight: 700; }
+.loading small { font-weight: 500; }

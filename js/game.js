@@ -668,6 +668,7 @@
     const t = END_TEXT[reason];
     const record = {
       id: 'g' + Date.now().toString(36),
+      gameId: state.gameId, // 伺服器端的遊戲 id，AI 評分與排行榜用
       jobId: job.id,
       jobName: job.name,
       jobIcon: job.icon,
@@ -761,8 +762,8 @@
     .then((id) => { state.gameId = id; })
     .catch(async () => {
       await UI.alert({
-        title: '無法連線事件資料庫',
-        message: '機會與命運牌需要伺服器。請在專案資料夾執行「python server.py」後重新整理；目前仍可遊玩，但抽不到牌。',
+        title: '無法連線遊戲伺服器',
+        message: '機會與命運牌、AI 評分與全服排名都需要伺服器。目前仍可遊玩，但抽不到牌，結算也會改用本機評分。',
       });
     })
     .finally(() => setDiceEnabled(true));
