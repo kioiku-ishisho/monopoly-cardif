@@ -7,6 +7,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+  <script>
+    try {
+      var s = JSON.parse(localStorage.getItem('lf.settings') || '{}');
+      var t = s.theme || 'system';
+      if (t === 'system') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.dataset.theme = t;
+    } catch (e) {}
+  </script>
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/game.css">
 </head>
@@ -30,17 +38,18 @@
     <div class="board-viewport" id="board-viewport" tabindex="0" role="region"
          aria-roledescription="地圖" aria-label="大富翁地圖" aria-describedby="map-help">
       <div class="board" id="board">
-        <ol class="tiles" id="tiles" aria-label="地圖格子"></ol>
-        <div class="board-center" id="board-center" aria-hidden="true"></div>
+        <svg class="roads" id="roads" aria-hidden="true" focusable="false"></svg>
+        <div class="loops" id="loops"></div>
         <div class="token" id="token" aria-hidden="true"></div>
       </div>
     </div>
-    <p class="sr-only" id="map-help">可拖曳移動地圖、滾輪或雙指縮放。鍵盤操作：方向鍵移動，加號與減號縮放，0 重置視角。</p>
+    <p class="sr-only" id="map-help">可拖曳移動地圖、滾輪或雙指縮放。鍵盤操作：方向鍵移動，加號與減號縮放，0 回到目前所在的圈，9 顯示全部三個人生階段。</p>
 
     <div class="map-controls" role="group" aria-label="地圖視角">
       <button class="icon-btn solid" type="button" id="btn-zoom-in" data-icon="plus" aria-label="放大地圖"></button>
       <button class="icon-btn solid" type="button" id="btn-zoom-out" data-icon="minus" aria-label="縮小地圖"></button>
       <button class="icon-btn solid" type="button" id="btn-zoom-me" data-icon="target" aria-label="以我的位置為中心"></button>
+      <button class="icon-btn solid" type="button" id="btn-zoom-all" data-icon="layers" aria-label="顯示全部人生階段"></button>
     </div>
 
     <div class="dice-area">
@@ -106,7 +115,9 @@
   <script src="js/data.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/api.js"></script>
+  <script src="js/insurance.js"></script>
   <script src="js/events.js"></script>
+  <script src="js/world.js"></script>
   <script src="js/game.js"></script>
 </body>
 </html>

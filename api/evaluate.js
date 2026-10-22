@@ -16,13 +16,15 @@ const MAX_POINTS = { longevity: 30, wealth: 35, health: 15, riskManagement: 10, 
 // 需與 js/data.js 的 tips id 一致（結算頁會依此解鎖提示）
 const TIP_IDS = ['emergency', 'rule72', 'diversify', 'insurance', 'compound', 'healthwealth', 'retirement', 'budget', 'dca', 'panic'];
 
-const SYSTEM_PROMPT = `你是「人生富翁」理財教育遊戲的評審。玩家從 25 歲開始，以某個職業走過青年、中年、老年，透過機會牌（可選擇）、命運牌（無法選擇）、醫療險與股票投資做財務決策。遊戲在破產、健康歸零或活到 100 歲時結束。
+const SYSTEM_PROMPT = `你是「人生富翁」理財教育遊戲的評審。玩家從 25 歲開始，以某個職業走過青年、中年、老年，透過機會牌（可選擇）、命運牌（無法選擇）、保險與股票投資做財務決策。遊戲在破產、健康歸零或活到 100 歲時結束。
+
+保險有九種：定期壽險、意外險、醫療險（實支實付）、重大傷病險、特定傷病險、癌症險、長照險、投資型保險、年金險。保費每月扣款，繳不出會停效。健康 ≤ 30 會進入長照狀態，每月多 3 萬照護費。退休後收入只剩月薪 40%，年金險可以補退休缺口。身故時壽險等給付計入 legacy（留給家人），不算玩家自己的淨資產。
 
 請依下列規準為這一局評分（每項給整數）：
 - longevity（0–30）：活得越久越高；100 歲滿分，40 歲前結束接近 0。
 - wealth（0–35）：最終淨資產相對年薪的倍數（wealthRatio）；破產為 0，約 20 倍年薪以上接近滿分。高薪職業不應只因薪水高而得高分。
 - health（0–15）：平均健康指數與健康相關選擇。
-- riskManagement（0–10）：是否投保（越早越好）、是否分散投資、有沒有被迫賣股、面對機會牌時是否權衡風險。
+- riskManagement（0–10）：保險組合是否涵蓋主要風險（醫療、重大傷病、長照、退休）、是否及早投保、保費是否符合雙十原則（maxPremiumRatio 約 0.1，明顯超過或停效都要扣分）、是否分散投資、有沒有被迫賣股、面對機會牌時是否權衡風險。
 - ending（0–10）：活到 100 歲 10 分；65 歲後健康耗盡約 6 分；65 歲前約 2 分；破產 0 分。
 
 接著用繁體中文（台灣用語）撰寫：
@@ -31,6 +33,7 @@ const SYSTEM_PROMPT = `你是「人生富翁」理財教育遊戲的評審。玩
 - advice：3～5 則具體、可在下一局實踐的理財建議，每則對應一個最相關的 tip。
 
 金額單位皆為新台幣元；salary、expense 是「每月」的薪資與支出，年薪 = salary × 12。
+如果玩家買了投資型保險，可以提醒「同樣的錢自己買 ETF 沒有費用，先買保障、再分開投資」。
 只根據提供的資料判斷，不要臆測沒發生的事。`;
 
 const SCHEMA = {
@@ -84,8 +87,9 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 function facts(r) {
   const pick = ['jobName', 'salary', 'expense', 'endReason', 'endReasonText', 'finalAge', 'finalStage', 'finalCash',
     'finalHealth', 'stockValue', 'netWorth', 'peakNetWorth', 'avgHealth', 'minHealth', 'laps', 'turns', 'trades',
-    'distinctStocks', 'realizedPnL', 'forcedSales', 'netIncomeAdj', 'insured', 'insuredStage', 'chanceAccepted',
-    'chanceDeclined', 'fateCount', 'claims', 'claimTotal', 'holdings'];
+    'distinctStocks', 'realizedPnL', 'forcedSales', 'netIncomeAdj', 'insured', 'firstInsuredAge', 'policies',
+    'premiumsPaid', 'monthlyPremium', 'maxPremiumRatio', 'policyValue', 'legacy', 'legacyItems', 'medicalHistory',
+    'majorIllness', 'ltcAge', 'chanceAccepted', 'chanceDeclined', 'fateCount', 'claims', 'claimTotal', 'holdings'];
   const out = Object.fromEntries(pick.filter((k) => k in r).map((k) => [k, r[k]]));
   out.wealthRatio = r.salary ? Math.round((Math.max(0, r.netWorth) / (r.salary * 12)) * 10) / 10 : 0;
   return out;

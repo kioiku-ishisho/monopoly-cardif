@@ -81,6 +81,7 @@
   function loadSettings() {
     const s = Store.getSettings();
     form.lang.value = s.lang;
+    form.querySelector(`input[name="theme"][value="${s.theme}"]`).checked = true;
     form.querySelector(`input[name="font"][value="${s.font}"]`).checked = true;
     form.reduceMotion.checked = s.reduceMotion;
     form.highContrast.checked = s.highContrast;
@@ -89,6 +90,7 @@
   form.addEventListener('change', () => {
     Store.saveSettings({
       lang: form.lang.value,
+      theme: form.querySelector('input[name="theme"]:checked').value,
       font: form.querySelector('input[name="font"]:checked').value,
       reduceMotion: form.reduceMotion.checked,
       highContrast: form.highContrast.checked,

@@ -16,7 +16,12 @@
     root.dataset.font = s.font;
     root.dataset.motion = s.reduceMotion ? 'reduce' : 'auto';
     root.dataset.contrast = s.highContrast ? 'high' : 'normal';
+    root.dataset.theme = s.theme === 'system' ? (darkQuery.matches ? 'dark' : 'light') : s.theme;
   };
+
+  // 「跟隨系統」時，系統切換深淺色要即時反映
+  const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+  darkQuery.addEventListener('change', () => { if (Store.getSettings().theme === 'system') UI.applySettings(); });
 
   UI.reducedMotion = () => document.documentElement.dataset.motion === 'reduce'
     || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -148,6 +153,7 @@
     minus: svg('<path d="M5 12h14"/>'),
     target: svg('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/>'),
     chevronUp: svg('<path d="m18 15-6-6-6 6"/>'),
+    layers: svg('<path d="m12 2 10 5-10 5L2 7z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/>'),
     trophy: svg('<path d="M8 21h8M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>'),
     home: svg('<path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2h-4v-7H9v7H5a2 2 0 0 1-2-2z"/>'),
   };

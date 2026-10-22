@@ -33,7 +33,7 @@
   const Store = wrap(() => window.localStorage);
   Store.session = wrap(() => window.sessionStorage);
 
-  const DEFAULT_SETTINGS = { font: 'normal', reduceMotion: false, highContrast: false, lang: 'zh-Hant' };
+  const DEFAULT_SETTINGS = { theme: 'system', font: 'normal', reduceMotion: false, highContrast: false, lang: 'zh-Hant' };
 
   Store.getSettings = () => Object.assign({}, DEFAULT_SETTINGS, Store.get('settings', {}));
   Store.saveSettings = (s) => Store.set('settings', s);

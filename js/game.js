@@ -21,7 +21,12 @@
     stageIndex: 0,
     turn: 0,
     netIncomeAdj: 0, // 事件牌造成的每月淨收入增減（持續）
-    insurance: null, // { premium, stage } 投保中的醫療險
+    policies: [], // 保單（js/insurance.js）
+    medicalHistory: [], // 病史：cancer / heart / stroke / esrd，相關險種會拒保
+    ltc: null, // 進入長照狀態時的 { since, age }
+    premiumArrears: 0, // 保費欠繳月數（寬限期）
+    incomeStopUntil: 0, // 生病停薪到第幾步（退休金不受影響）
+    lastTag: null, // 本回合最後一個事件的疾病標籤 { tag, turn }，判斷意外身故
     gameId: null, // 伺服器端的遊戲 id，用來抽牌
     holdings: {}, // { 股票id: { shares, cost } }
     market: D.stocks.map((s) => ({ ...s, prev: s.price, history: [s.price] })),
@@ -45,17 +50,23 @@
     fateCount: 0,
     claims: 0,
     claimTotal: 0,
+    premiumsPaid: 0,
+    firstInsuredAge: null,
+    maxPremiumRatio: 0,
+    majorIllness: 0,
   };
 
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   const stage = () => D.stages[state.stageIndex];
   const age = () => E.startAge + (state.steps * E.monthsPerStep) / 12;
   const ageInt = () => Math.floor(age());
-  const monthlyIncome = () => Math.round(job.salary * E.incomeRate[stage().id]);
-  const premium = () => (state.insurance ? state.insurance.premium : 0);
-  const monthlyNet = () => monthlyIncome() - job.expense + state.netIncomeAdj - premium();
+  const incomeStopped = () => stage().id !== 'elder' && state.steps < state.incomeStopUntil;
+  const monthlyIncome = () => (incomeStopped() ? 0 : Math.round(job.salary * E.incomeRate[stage().id]));
+  // 不含保險的每月收支；保費與保險給付由 Ins.monthly() 另外處理
+  const monthlyCashflow = () => monthlyIncome() - job.expense - Ins.careCost() + state.netIncomeAdj;
+  const monthlyNet = () => monthlyCashflow() - Ins.monthlyPremium() + Ins.monthlyBenefit();
   const stockValue = () => state.market.reduce((sum, s) => sum + (state.holdings[s.id]?.shares || 0) * s.price, 0);
-  const netWorth = () => state.cash + stockValue();
+  const netWorth = () => state.cash + stockValue() + Ins.value();
 
   function stageIndexForLap(lap) {
     let acc = 0;
@@ -75,72 +86,116 @@
     state.log.push({ turn: state.turn, age: ageInt(), stage: stage().id, text, category });
   }
 
+  const Ins = Insurance.create({
+    state,
+    job,
+    stats,
+    age,
+    etfPrice: () => state.market.find((s) => s.id === 'ETF50').price,
+    addHistory,
+    logDecision,
+    toast: UI.toast,
+  });
+
   function announce(msg) {
     $('#dice-result').textContent = msg;
   }
 
-  // ===== 地圖 =====
-  const TILE_PX = 96;
-  const SIDE = E.tilesPerLap / 4; // 每邊格數（不含下一個角落）
-  const GRID = SIDE + 1; // 地圖為 GRID × GRID 的方格
-  const tilesEl = $('#tiles');
+  // ===== 地圖：三個人生階段的圈放在同一張大地圖 =====
+  const STAGE_IDS = D.stages.map((s) => s.id);
+  const WORLD = GameWorld.build(STAGE_IDS, E.tilesPerLap);
+  const loopsEl = $('#loops');
+  const roadsEl = $('#roads');
   const token = $('#token');
-  setBoardGrid();
 
-  function setBoardGrid() {
-    const b = $('#board');
-    b.style.setProperty('--tile', TILE_PX + 'px');
-    b.style.setProperty('--grid', GRID);
-  }
-
-  // 0 號格在右下角，逆時針前進
-  function tileCell(i) {
-    const n = SIDE;
-    if (i < n) return { r: n, c: n - i }; // 下排，右 → 左
-    if (i < 2 * n) return { r: n - (i - n), c: 0 }; // 左排，下 → 上
-    if (i < 3 * n) return { r: 0, c: i - 2 * n }; // 上排，左 → 右
-    return { r: i - 3 * n, c: n }; // 右排，上 → 下
-  }
-
-  function boardTiles() {
-    return D.boards[stage().id].map((type, i) => ({ index: i, type, ...D.tileTypes[type] }));
+  function boardTiles(stageId = stage().id) {
+    return D.boards[stageId].map((type, i) => ({ index: i, type, ...D.tileTypes[type] }));
   }
   const currentTile = () => boardTiles()[state.position];
+  const activeLoopEl = () => loopsEl.querySelector(`.loop[data-stage="${stage().id}"]`);
 
-  function buildBoard() {
-    document.body.dataset.stage = stage().id;
-    tilesEl.innerHTML = boardTiles().map((t) => {
-      const { r, c } = tileCell(t.index);
-      const corner = t.index % SIDE === 0;
-      return `<li class="tile${corner ? ' corner' : ''}" data-type="${t.type}" data-index="${t.index}"
-                style="grid-row:${r + 1};grid-column:${c + 1}">
-        <span class="tile-no" aria-hidden="true">${t.index + 1}</span>
-        <span class="tile-icon" aria-hidden="true">${t.icon}</span>
-        <span class="tile-name">${UI.escape(t.name)}</span>
-      </li>`;
+  // 只建立一次：道路（SVG）、各圈的格子與標籤
+  function buildWorld() {
+    const boardEl = $('#board');
+    boardEl.style.width = WORLD.width + 'px';
+    boardEl.style.height = WORLD.height + 'px';
+    roadsEl.setAttribute('viewBox', `0 0 ${WORLD.width} ${WORLD.height}`);
+    roadsEl.setAttribute('width', WORLD.width);
+    roadsEl.setAttribute('height', WORLD.height);
+    roadsEl.innerHTML = [
+      ...WORLD.bridges.map((b) => `
+        <path class="bridge" d="${b.d}"/>
+        <text class="bridge-label" x="${b.mid.x}" y="${b.mid.y}">${D.stages.find((s) => s.id === b.to).ageFrom} 歲 →</text>`),
+      ...STAGE_IDS.map((id) => `
+        <g class="road" data-stage="${id}">
+          <path class="road-edge" d="${WORLD.loops[id].path}"/>
+          <path class="road-bed" d="${WORLD.loops[id].path}"/>
+          <path class="road-line" d="${WORLD.loops[id].path}"/>
+        </g>`),
+    ].join('');
+
+    loopsEl.innerHTML = D.stages.map((s) => {
+      const loop = WORLD.loops[s.id];
+      const counts = D.boardCounts[s.id];
+      return `
+        <section class="loop" data-stage="${s.id}" aria-label="${s.name}圈">
+          <div class="loop-label" style="left:${loop.center.x}px;top:${loop.center.y}px" aria-hidden="true">
+            <div class="loop-name">${s.name}</div>
+            <div class="loop-ages">${s.ageFrom}${s.ageTo ? `–${s.ageTo} 歲` : ' 歲以上'}</div>
+            <div class="loop-status" data-status="${s.id}"></div>
+            <div class="loop-legend">${['chance', 'fate', 'insurance', 'rest'].map((t) =>
+              `<span>${D.tileTypes[t].icon} ${counts[t]}</span>`).join('')}</div>
+          </div>
+          <ol class="tiles" aria-label="${s.name}圈的格子">
+            ${boardTiles(s.id).map((t) => {
+              const p = loop.points[t.index];
+              const rot = ((t.index * 37) % 13) - 6; // 固定的小角度傾斜（-6°～6°）
+              return `<li class="tile${t.index === 0 ? ' start' : ''}" data-type="${t.type}" data-index="${t.index}"
+                        style="left:${p.x.toFixed(1)}px;top:${p.y.toFixed(1)}px;--rot:${rot}deg">
+                <span class="tile-no" aria-hidden="true">${t.index + 1}</span>
+                <span class="tile-icon" aria-hidden="true">${t.icon}</span>
+                <span class="tile-name">${UI.escape(t.name)}</span>
+              </li>`;
+            }).join('')}
+          </ol>
+        </section>`;
     }).join('');
     token.textContent = job.icon;
     token.style.setProperty('--job-color', job.color);
+  }
+
+  // 標示目前所在的圈；其他圈變淡，且不讓螢幕閱讀器讀到
+  function buildBoard() {
+    if (!loopsEl.children.length) buildWorld();
+    document.body.dataset.stage = stage().id;
+    loopsEl.querySelectorAll('.loop').forEach((el) => {
+      const idx = STAGE_IDS.indexOf(el.dataset.stage);
+      const st = idx === state.stageIndex ? 'active' : idx < state.stageIndex ? 'done' : 'upcoming';
+      el.dataset.state = st;
+      el.toggleAttribute('aria-hidden', st !== 'active');
+      roadsEl.querySelector(`.road[data-stage="${el.dataset.stage}"]`).dataset.state = st;
+    });
     placeToken(false);
     renderStatus();
   }
 
   function tokenCenter() {
-    const { r, c } = tileCell(state.position);
-    return { x: (c + 0.5) * TILE_PX, y: (r + 0.5) * TILE_PX };
+    return WORLD.loops[stage().id].points[state.position];
   }
 
   function placeToken(hop) {
     const { x, y } = tokenCenter();
     token.style.left = x + 'px';
     token.style.top = y + 'px';
-    tilesEl.querySelectorAll('.tile.current').forEach((t) => t.classList.remove('current'));
-    const cur = tilesEl.querySelector(`[data-index="${state.position}"]`);
+    loopsEl.querySelectorAll('.tile.current').forEach((t) => {
+      t.classList.remove('current');
+      t.removeAttribute('aria-current');
+    });
+    const cur = activeLoopEl()?.querySelector(`[data-index="${state.position}"]`);
     if (cur) {
       cur.classList.add('current');
       cur.setAttribute('aria-current', 'location');
     }
-    tilesEl.querySelectorAll('[aria-current]').forEach((t) => { if (t !== cur) t.removeAttribute('aria-current'); });
     if (hop && !UI.reducedMotion()) {
       token.classList.remove('hop');
       void token.offsetWidth;
@@ -151,10 +206,10 @@
   // ===== 地圖拖曳 / 縮放 =====
   const vp = $('#board-viewport');
   const board = $('#board');
-  const BOARD_PX = TILE_PX * GRID;
-  const MIN_S = 0.12;
+  const MIN_S = 0.05;
   const MAX_S = 2;
-  const READABLE_S = 0.5; // 小螢幕整張地圖放不下時，改用此倍率並跟著棋子
+  const READABLE_S = 0.5; // 小螢幕整圈放不下時，改用此倍率並跟著棋子
+  const DICE_SPACE = 150; // 底部預留給骰子
   const view = { x: 0, y: 0, s: 1 };
   let userMoved = false;
 
@@ -163,20 +218,24 @@
     board.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.s})`;
   }
 
-  function fitBoard(animate) {
+  // 把地圖上的矩形區域放進畫面；readable 為 true 時，縮太小就改成跟著棋子
+  function fitRect(rect, animate, readable) {
     const r = vp.getBoundingClientRect();
-    // 預留骰子按鈕的空間
-    const usableH = Math.max(200, r.height - 150);
-    view.s = clamp(Math.min(r.width / BOARD_PX, usableH / BOARD_PX) * 0.94, MIN_S, MAX_S);
-    if (view.s < READABLE_S * 0.8) {
+    const usableH = Math.max(200, r.height - DICE_SPACE);
+    const s = clamp(Math.min(r.width / rect.w, usableH / rect.h) * 0.94, MIN_S, MAX_S);
+    if (readable && s < READABLE_S * 0.8) {
       view.s = READABLE_S;
       centerOnToken(animate);
       return;
     }
-    view.x = (r.width - BOARD_PX * view.s) / 2;
-    view.y = Math.max(8, (usableH - BOARD_PX * view.s) / 2);
+    view.s = s;
+    view.x = (r.width - rect.w * s) / 2 - rect.x * s;
+    view.y = (usableH - rect.h * s) / 2 - rect.y * s;
     applyView(animate);
   }
+
+  const fitBoard = (animate) => fitRect(WORLD.loops[stage().id].bbox, animate, true);
+  const fitWorld = (animate) => fitRect(WORLD.bbox, animate, false);
 
   function zoomAt(factor, cx, cy) {
     const ns = clamp(view.s * factor, MIN_S, MAX_S);
@@ -196,11 +255,8 @@
   function centerOnToken(animate) {
     const r = vp.getBoundingClientRect();
     const { x, y } = tokenCenter();
-    const size = BOARD_PX * view.s;
-    // 地圖比畫面大時，避免邊緣外露出空白
-    const clampAxis = (v, viewport) => (size > viewport ? clamp(v, viewport - size, 0) : v);
-    view.x = clampAxis(r.width / 2 - x * view.s, r.width);
-    view.y = clampAxis((r.height - 150) / 2 - y * view.s, r.height - 150); // 底部留給骰子
+    view.x = r.width / 2 - x * view.s;
+    view.y = (r.height - DICE_SPACE) / 2 - y * view.s;
     applyView(animate);
   }
 
@@ -210,7 +266,7 @@
     const sx = view.x + x * view.s;
     const sy = view.y + y * view.s;
     const pad = 40;
-    if (sx < pad || sx > r.width - pad || sy < pad || sy > r.height - 150) centerOnToken(true);
+    if (sx < pad || sx > r.width - pad || sy < pad || sy > r.height - DICE_SPACE) centerOnToken(true);
   }
 
   const pointers = new Map();
@@ -275,11 +331,13 @@
     else if (e.key === '+' || e.key === '=') { zoomCenter(1.2); e.preventDefault(); }
     else if (e.key === '-' || e.key === '_') { zoomCenter(1 / 1.2); e.preventDefault(); }
     else if (e.key === '0') { userMoved = false; fitBoard(true); e.preventDefault(); }
+    else if (e.key === '9') { userMoved = true; fitWorld(true); e.preventDefault(); }
   });
 
   $('#btn-zoom-in').addEventListener('click', () => zoomCenter(1.25));
   $('#btn-zoom-out').addEventListener('click', () => zoomCenter(1 / 1.25));
   $('#btn-zoom-me').addEventListener('click', () => { userMoved = true; centerOnToken(true); });
+  $('#btn-zoom-all').addEventListener('click', () => { userMoved = true; fitWorld(true); });
   window.addEventListener('resize', () => { if (!userMoved) fitBoard(false); });
 
   // ===== 狀態顯示 =====
@@ -292,12 +350,13 @@
     meter.querySelector('span').style.width = state.health + '%';
     meter.classList.toggle('warn', state.health <= 50 && state.health > 25);
     meter.classList.toggle('danger', state.health <= 25);
-    $('#board-center').innerHTML = `
-      <div class="center-stage">${stage().name}</div>
-      <div class="center-age">${ageInt()} 歲</div>
-      <div class="center-lap">第 ${state.lap + 1} 圈・每圈 ${E.yearsPerLap} 年・一格 ${E.monthsPerStep} 個月</div>
-      <div class="center-legend">${['chance', 'fate', 'insurance', 'rest'].map((t) =>
-        `<span>${D.tileTypes[t].icon} ${D.tileTypes[t].name} ${D.boardCounts[stage().id][t]}</span>`).join('')}</div>`;
+    loopsEl.querySelectorAll('[data-status]').forEach((el) => {
+      const idx = STAGE_IDS.indexOf(el.dataset.status);
+      // 圈數以「這個階段的第幾圈」顯示
+      const lapsBefore = D.stages.slice(0, state.stageIndex).reduce((sum, s) => sum + s.laps, 0);
+      el.textContent = idx === state.stageIndex ? `目前 ${ageInt()} 歲・第 ${state.lap - lapsBefore + 1} 圈`
+        : idx < state.stageIndex ? '已走完 ✓' : '尚未開始';
+    });
     if ($('#sheet').classList.contains('open')) renderSheet();
   }
 
@@ -327,25 +386,31 @@
     // 股市淨利 = 已實現損益（賣出）+ 未實現損益（持股市值 − 成本）
     const unrealized = stockValue() - Object.values(state.holdings).reduce((s, h) => s + h.cost, 0);
     const stockProfit = stats.realizedPnL + unrealized;
-    const ins = state.insurance
-      ? `${D.insurance.name}（${UI.fmtMoney(state.insurance.premium)}/月）`
-      : '未投保';
+    const premium = Ins.monthlyPremium();
+    const benefit = Ins.monthlyBenefit();
     $('#sheet-body').innerHTML = `
       <dl class="info-grid">
         <div><dt>職業</dt><dd>${job.icon} ${UI.escape(job.name)}</dd></div>
         <div><dt>年齡</dt><dd>${ageInt()} 歲</dd></div>
         <div><dt>人生階段</dt><dd>${stage().name}</dd></div>
         <div><dt>${stage().id === 'elder' ? '每月退休金' : '每月收入'}</dt><dd>${UI.fmtMoney(income)}</dd></div>
-        <div><dt>每月生活費</dt><dd>${UI.fmtMoney(job.expense)}</dd></div>
+        <div><dt>每月生活費</dt><dd>${UI.fmtMoney(job.expense)}</dd>
+          ${state.ltc ? `<dd class="info-sub">另加長照照護費 ${UI.fmtMoney(Ins.careCost())}</dd>` : ''}</div>
         <div><dt>事件造成的淨收入變化</dt><dd class="${state.netIncomeAdj >= 0 ? 'pos' : 'neg'}">${UI.fmtSigned(state.netIncomeAdj)}/月</dd></div>
-        <div><dt>保險</dt><dd>${ins}</dd></div>
+        <div><dt>每月保費</dt><dd>${UI.fmtMoney(premium)}</dd>
+          <dd class="info-sub${premium > job.salary * D.insurance.budgetRate ? ' neg' : ''}">月薪的 ${Math.round((premium / job.salary) * 100)}%（建議約 ${Math.round(D.insurance.budgetRate * 100)}%）</dd></div>
+        ${benefit ? `<div><dt>每月保險給付</dt><dd class="pos">${UI.fmtSigned(benefit)}</dd></div>` : ''}
         <div><dt>每月結餘</dt><dd class="${net >= 0 ? 'pos' : 'neg'}">${UI.fmtSigned(net)}</dd></div>
         <div><dt>現金</dt><dd>${UI.fmtMoney(state.cash)}</dd></div>
         <div><dt>股票市值</dt><dd>${UI.fmtMoney(stockValue())}</dd></div>
+        <div><dt>保單價值</dt><dd>${UI.fmtMoney(Ins.value())}</dd>
+          <dd class="info-sub">投資型保險與年金險帳戶</dd></div>
         <div><dt>股市截至目前淨利</dt><dd class="${stockProfit >= 0 ? 'pos' : 'neg'}">${UI.fmtSigned(stockProfit)}</dd>
           <dd class="info-sub">已實現 ${UI.fmtSigned(stats.realizedPnL)}・未實現 ${UI.fmtSigned(unrealized)}</dd></div>
         <div><dt>淨資產</dt><dd>${UI.fmtMoney(netWorth())}</dd></div>
-        <div><dt>健康指數</dt><dd>${state.health} / 100</dd></div>
+        <div><dt>健康指數</dt><dd>${state.health} / 100</dd>
+          ${state.ltc ? '<dd class="info-sub neg">長照狀態</dd>' : ''}
+          ${state.medicalHistory.length ? `<dd class="info-sub">病史：${state.medicalHistory.map((t) => Insurance.TAG_NAME[t]).join('、')}</dd>` : ''}</div>
         <div><dt>已完成圈數</dt><dd>${state.lap} 圈</dd></div>
         <div><dt>回合數</dt><dd>${state.turn}</dd></div>
       </dl>
@@ -359,8 +424,61 @@
             const pnl = value - h.cost;
             return `<tr><td>${UI.escape(s.name)}</td><td>${h.shares.toLocaleString('zh-TW')}</td><td>${s.price.toFixed(2)}</td><td>${UI.fmtMoney(value)}</td><td class="${pnl >= 0 ? 'pos' : 'neg'}">${UI.fmtSigned(pnl)}</td></tr>`;
           }).join('')}</tbody>
-        </table></div>` : '<p class="empty">目前沒有持股，可以從右上角「股票」開始投資。</p>'}`;
+        </table></div>` : '<p class="empty">目前沒有持股，可以從右上角「股票」開始投資。</p>'}
+      <h3>保單</h3>
+      ${policyTable()}`;
   }
+
+  function policyTable() {
+    if (!state.policies.length) return '<p class="empty">目前沒有保單，踩到「保險」格時可以投保。</p>';
+    return `
+      <div class="table-wrap"><table class="data-table policy-table">
+        <thead><tr><th scope="col">險種</th><th scope="col">投保</th><th scope="col">狀態</th><th scope="col">月繳</th><th scope="col">已繳</th><th scope="col">已領給付</th><th scope="col">保單價值</th><th scope="col"><span class="sr-only">操作</span></th></tr></thead>
+        <tbody>${state.policies.map((p) => {
+          const active = p.status === 'active';
+          const due = active && !p.paidUp && !p.stopped;
+          const surrender = Ins.surrenderValue(p);
+          const actions = [];
+          if (active && p.id === 'invest') actions.push(`<button class="btn btn-sm btn-ghost" type="button" data-policy-stop="${p.uid}" ${state.over ? 'disabled' : ''}>${p.stopped ? '恢復繳費' : '停繳'}</button>`);
+          if (Ins.canSurrender(p)) actions.push(`<button class="btn btn-sm btn-ghost" type="button" data-policy-cancel="${p.uid}" ${state.over ? 'disabled' : ''}>解約${surrender ? `（${UI.fmtMoney(surrender)}）` : ''}</button>`);
+          return `<tr class="${active ? '' : 'inactive'}">
+            <td>${Insurance.PRODUCTS[p.id].icon} ${UI.escape(p.name)}</td>
+            <td>${p.entryAge} 歲</td>
+            <td>${Ins.statusText(p)}</td>
+            <td>${due ? UI.fmtMoney(p.monthly) : '—'}</td>
+            <td>${UI.fmtMoney(p.paid)}</td>
+            <td>${UI.fmtMoney(p.claimed)}</td>
+            <td>${UI.fmtMoney(Ins.policyValue(p))}</td>
+            <td class="policy-actions">${actions.join('')}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>
+      <p class="e-meta">保費與生活費一起每月扣款；現金不足時有 ${D.insurance.graceMonths} 個月寬限期，之後仍繳不出就停效。</p>`;
+  }
+
+  $('#sheet-body').addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-policy-cancel],[data-policy-stop]');
+    if (!btn || state.over) return;
+    if (btn.dataset.policyStop) {
+      Ins.toggleStop(Number(btn.dataset.policyStop));
+    } else {
+      const uid = Number(btn.dataset.policyCancel);
+      const p = state.policies.find((x) => x.uid === uid);
+      const cash = Ins.surrenderValue(p);
+      const ok = await UI.confirm({
+        title: `解約${p.name}`,
+        message: cash ? `解約後可領回 ${UI.fmtMoney(cash)}，保障立即結束。` : '這張保單沒有解約金，解約後保障立即結束，之後重新投保要再核保。',
+        okText: '解約',
+        cancelText: '保留',
+        danger: true,
+      });
+      if (!ok) return;
+      Ins.surrender(uid);
+      UI.toast(`已解約${p.name}`);
+    }
+    renderStatus();
+    renderSheet();
+  });
 
   // ===== 股票 =====
   function gaussian() {
@@ -541,12 +659,14 @@
       addHistory('life', n >= 0 ? '📈' : '📉', `${reason}（淨收入 ${UI.fmtSigned(n)}/月）`);
       renderStatus();
     },
-    buyInsurance() {
-      state.insurance = { premium: D.insurance.premium[stage().id], stage: stage().id };
-      addHistory('life', '🛡️', `投保${D.insurance.name}（保費 ${UI.fmtMoney(state.insurance.premium)}/月）`);
-      logDecision(`${ageInt()} 歲投保${D.insurance.name}，每月 ${UI.fmtMoney(state.insurance.premium)}`, 'insurance');
-      renderStatus();
+    insurance: Ins,
+    job,
+    // 生病停薪；退休後不影響退休金
+    stopIncome(months) {
+      state.incomeStopUntil = Math.max(state.incomeStopUntil, state.steps + Math.ceil(months / E.monthsPerStep));
+      if (stage().id !== 'elder') addHistory('life', '⏸️', `因病停薪 ${months} 個月`);
     },
+    age: ageInt,
     stageId: () => stage().id,
     gameId: () => state.gameId,
     stats,
@@ -581,6 +701,7 @@
 
   async function passStart() {
     state.lap++;
+    Ins.onLap();
     const decay = E.healthDecayPerLap[stage().id];
     if (decay) {
       state.health = clamp(state.health - decay, 0, 100);
@@ -591,6 +712,8 @@
     if (idx !== state.stageIndex) {
       state.stageIndex = idx;
       buildBoard();
+      userMoved = false;
+      fitBoard(true); // 鏡頭移到新的一圈
       const msg = {
         middle: '人生進入中年（40–65 歲）。收入提升為月薪的 1.3 倍，但家庭與健康的挑戰也變多了。',
         elder: `你退休了！之後收入改為退休金（約月薪的 ${Math.round(E.incomeRate.elder * 100)}%），健康也會加速下降。`,
@@ -615,7 +738,8 @@
       await waitIfPaused();
       state.position = (state.position + 1) % E.tilesPerLap;
       state.steps++;
-      state.cash += monthlyNet() * E.monthsPerStep;
+      state.cash += monthlyCashflow() * E.monthsPerStep;
+      Ins.monthly();
       if (state.position === 0) await passStart();
       placeToken(true);
       renderStatus();
@@ -628,6 +752,8 @@
     marketTick(n * E.monthsPerStep);
     await waitIfPaused();
     await (TileEvents[tile.type] || TileEvents.default)(tile, ctx);
+    await maybeMajorIllness(n * E.monthsPerStep);
+    await checkLtc();
 
     stats.peakNetWorth = Math.max(stats.peakNetWorth, netWorth());
     stats.minHealth = Math.min(stats.minHealth, state.health);
@@ -638,6 +764,35 @@
     if (await checkEnd()) return;
     state.busy = false;
     setDiceEnabled(true);
+  }
+
+  // 重大疾病：每回合依年齡與健康擲一次（命運牌裡的大病很少，補上才能體會重大傷病、癌症險的價值）
+  async function maybeMajorIllness(months) {
+    if (state.health <= 0) return;
+    const cfg = D.majorIllness;
+    let rate = Insurance.interp(cfg.annualRate, age());
+    if (state.health < 70) rate *= 1 + ((70 - state.health) / 10) * 0.2;
+    if (Math.random() >= (rate * months) / 12) return;
+    const totalWeight = cfg.events.reduce((s, ev) => s + ev.weight, 0);
+    let r = Math.random() * totalWeight;
+    const ev = cfg.events.find((x) => (r -= x.weight) < 0) || cfg.events[0];
+    stats.majorIllness++;
+    await TileEvents.illness(ev, ctx);
+    renderStatus();
+  }
+
+  async function checkLtc() {
+    const res = Ins.checkLtc();
+    if (!res) return;
+    renderStatus();
+    const notes = res.notes.length ? res.notes : ['你沒有長照險，照護費必須全部自付。'];
+    await UI.alert({
+      title: '🧑‍🦽 進入長照狀態',
+      html: `<p>健康降到 ${state.health}，日常生活需要他人照顧，之後每月多 ${UI.fmtMoney(Ins.careCost())} 照護費。</p>
+        <ul>${notes.map((t) => `<li>${UI.escape(t)}</li>`).join('')}</ul>`,
+      okText: '我知道了',
+      dismissible: false,
+    });
   }
 
   async function checkEnd() {
@@ -671,6 +826,9 @@
     state.over = true;
     setDiceEnabled(false);
     const t = END_TEXT[reason];
+    const lastTag = state.lastTag && state.lastTag.turn === state.turn ? state.lastTag.tag : null;
+    const legacy = reason === 'death' ? Ins.deathBenefits(lastTag) : { total: 0, items: [] };
+    const policyValue = reason === 'death' ? 0 : Ins.value(); // 身故時保單價值已轉成給家人的給付
     const record = {
       id: 'g' + Date.now().toString(36),
       gameId: state.gameId, // 伺服器端的遊戲 id，AI 評分與排行榜用
@@ -686,7 +844,10 @@
       finalCash: Math.round(state.cash),
       finalHealth: state.health,
       stockValue: Math.round(stockValue()),
-      netWorth: Math.round(netWorth()),
+      policyValue: Math.round(policyValue),
+      netWorth: Math.round(state.cash + stockValue() + policyValue),
+      legacy: legacy.total,
+      legacyItems: legacy.items,
       peakNetWorth: Math.round(stats.peakNetWorth),
       minHealth: stats.minHealth,
       avgHealth: stats.healthSamples ? Math.round(stats.healthSum / stats.healthSamples) : state.health,
@@ -697,8 +858,15 @@
       realizedPnL: Math.round(stats.realizedPnL),
       forcedSales: stats.forcedSales,
       netIncomeAdj: state.netIncomeAdj,
-      insured: !!state.insurance,
-      insuredStage: state.insurance ? state.insurance.stage : null,
+      insured: state.policies.length > 0,
+      firstInsuredAge: stats.firstInsuredAge,
+      policies: Ins.summary(),
+      premiumsPaid: Math.round(stats.premiumsPaid),
+      monthlyPremium: Ins.monthlyPremium(),
+      maxPremiumRatio: Math.round(stats.maxPremiumRatio * 100) / 100,
+      medicalHistory: state.medicalHistory.slice(),
+      majorIllness: stats.majorIllness,
+      ltcAge: state.ltc ? state.ltc.age : null,
       chanceAccepted: stats.chanceAccepted,
       chanceDeclined: stats.chanceDeclined,
       fateCount: stats.fateCount,
@@ -714,7 +882,9 @@
     Store.session.remove('newGame');
     await UI.modal({
       title: t.title,
-      body: `<p class="pause-body" aria-hidden="true">${t.icon}</p><p>${UI.escape(record.endReasonText)}</p><p>接下來 AI 會為你的人生進行評分、總結與建議。</p>`,
+      body: `<p class="pause-body" aria-hidden="true">${t.icon}</p><p>${UI.escape(record.endReasonText)}</p>
+        ${legacy.total ? `<p>🕊️ 保險給付家人 ${UI.fmtMoney(legacy.total)}（${legacy.items.map((i) => `${UI.escape(i.name)} ${UI.fmtMoney(i.amount)}`).join('、')}）</p>` : ''}
+        <p>接下來 AI 會為你的人生進行評分、總結與建議。</p>`,
       actions: [{ label: '查看人生結算', value: 'ok', variant: 'primary' }],
       dismissible: false,
     });

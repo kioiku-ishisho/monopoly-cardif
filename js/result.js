@@ -70,6 +70,10 @@
       ['最高淨資產', UI.fmtMoney(record.peakNetWorth)],
       ['現金', UI.fmtMoney(record.finalCash)],
       ['股票市值', UI.fmtMoney(record.stockValue)],
+      ...(record.policyValue ? [['保單價值', UI.fmtMoney(record.policyValue)]] : []),
+      ['累計保費', UI.fmtMoney(record.premiumsPaid || 0)],
+      ['保險理賠', UI.fmtMoney(record.claimTotal || 0)],
+      ...(record.legacy ? [['留給家人', UI.fmtMoney(record.legacy)]] : []),
       ['平均健康', `${record.avgHealth} / 100`],
       ['回合數', `${record.turns} 回合`],
     ];
