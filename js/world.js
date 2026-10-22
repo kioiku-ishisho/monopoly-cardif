@@ -10,7 +10,10 @@
     middle: { cx: 2650, cy: 820, R: 640, sx: 0.95, sy: 1.08, waves: [[2, 0.09, 2.4], [3, 0.08, 0.2], [4, 0.04, 1.1]] },
     elder: { cx: 1750, cy: 2380, R: 640, sx: 1.18, sy: 0.88, waves: [[2, 0.07, 1.2], [3, 0.09, 2.8], [5, 0.04, 2.2]] },
   };
-  const MARGIN = 220; // 地圖四周留白
+  // 整體放大倍率：圈越大，格子間距越大（1.3 倍時約 90px），格子才能做大
+  const SCALE = 1.3;
+  Object.values(SHAPES).forEach((s) => { s.cx *= SCALE; s.cy *= SCALE; s.R *= SCALE; });
+  const MARGIN = 240; // 地圖四周留白
   const SAMPLES = 1440;
 
   function radius(shape, theta) {
