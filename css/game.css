@@ -366,3 +366,7 @@
   .player-bar { padding-inline: 24px; }
   .player-summary { max-width: 720px; margin: 0 auto; display: grid; }
 }
+
+.outcome-table { background: var(--surface); border-radius: var(--radius-sm); }
+.outcome-table th[scope="row"] { font-weight: 700; }
+.info-grid dd.info-sub { font-size: 0.75rem; font-weight: 500; color: var(--text-muted); }

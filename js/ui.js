@@ -71,13 +71,28 @@
         </form>`;
       const bodyEl = dlg.querySelector('.modal-body');
       if (typeof body === 'string') bodyEl.innerHTML = body; else bodyEl.append(body);
-      if (!dismissible) dlg.addEventListener('cancel', (e) => e.preventDefault());
-      bindBackdropClose(dlg);
-      dlg.addEventListener('close', () => {
-        resolve(dlg.returnValue || 'cancel');
+      // 不只依賴 close 事件（部分環境會延遲或不觸發），按鈕送出時就直接結束
+      let done = false;
+      const finish = (value) => {
+        if (done) return;
+        done = true;
+        if (dlg.open) dlg.close(value);
+        resolve(value || 'cancel');
         dlg.remove();
         if (opener && document.contains(opener)) opener.focus();
+      };
+      dlg.querySelector('form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        finish(e.submitter ? e.submitter.value : 'cancel');
       });
+      dlg.addEventListener('cancel', (e) => {
+        e.preventDefault();
+        if (dismissible) finish('cancel');
+      });
+      dlg.addEventListener('click', (e) => {
+        if (e.target === dlg && dismissible) finish('cancel');
+      });
+      dlg.addEventListener('close', () => finish(dlg.returnValue));
       document.body.append(dlg);
       dlg.showModal();
     });
@@ -133,6 +148,7 @@
     minus: svg('<path d="M5 12h14"/>'),
     target: svg('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/>'),
     chevronUp: svg('<path d="m18 15-6-6-6 6"/>'),
+    trophy: svg('<path d="M8 21h8M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>'),
     home: svg('<path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2h-4v-7H9v7H5a2 2 0 0 1-2-2z"/>'),
   };
 

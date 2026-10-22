@@ -333,3 +333,15 @@ fieldset.field { border: 0; padding: 0; margin: 0 0 18px; }
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ===== 全服排行榜 ===== */
+.lb-mine { padding: 12px 14px; border-radius: var(--radius-sm); background: var(--surface-2); font-weight: 700; }
+.lb-mine strong { color: var(--primary); font-size: 1.1em; }
+.lb-table td, .lb-table th { padding: 10px 8px; border-bottom: 1px solid var(--border); text-align: left; }
+.lb-table thead th { font-size: 0.8rem; color: var(--text-muted); }
+.lb-table { width: 100%; border-collapse: collapse; }
+.lb-rank { width: 3.5em; font-weight: 900; font-size: 1.1rem; }
+.lb-score { font-weight: 900; color: var(--primary); white-space: nowrap; }
+.lb-score small { margin-left: 4px; color: var(--text-muted); font-size: 0.75rem; }
+.lb-table tr.is-me { background: var(--surface-2); outline: 2px solid var(--primary); outline-offset: -2px; }
+.lb-me { color: var(--primary); }

@@ -2,6 +2,7 @@
 (function () {
   const $ = (s) => document.querySelector(s);
   UI.fillIcons();
+  $('#btn-leaderboard').addEventListener('click', () => Leaderboard.open());
 
   const record = Store.session.get('lastResult');
   const main = $('#main');

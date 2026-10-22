@@ -14,12 +14,12 @@ export const GAME_ID = /^[0-9a-f]{32}$/;
 export const PLAYER_ID = /^[0-9a-f-]{36}$/;
 export const CARD_ID = /^[YMO][1-6]-\d{2}$/;
 
-// 包裝 handler：只接受 POST、解析 body、統一錯誤格式
-export function postHandler(fn) {
+// 包裝 handler：只接受指定的 HTTP 方法、解析 body、統一錯誤格式
+function methodHandler(method, fn) {
   return async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
-    if (req.method !== 'POST') {
-      res.setHeader('Allow', 'POST');
+    if (req.method !== method) {
+      res.setHeader('Allow', method);
       return res.status(405).json({ error: 'method_not_allowed' });
     }
     try {
@@ -33,3 +33,6 @@ export function postHandler(fn) {
     }
   };
 }
+
+export const postHandler = (fn) => methodHandler('POST', fn);
+export const getHandler = (fn) => methodHandler('GET', fn);

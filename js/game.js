@@ -324,6 +324,9 @@
     const income = monthlyIncome();
     const net = monthlyNet();
     const rows = state.market.filter((s) => state.holdings[s.id]?.shares);
+    // 股市淨利 = 已實現損益（賣出）+ 未實現損益（持股市值 − 成本）
+    const unrealized = stockValue() - Object.values(state.holdings).reduce((s, h) => s + h.cost, 0);
+    const stockProfit = stats.realizedPnL + unrealized;
     const ins = state.insurance
       ? `${D.insurance.name}（${UI.fmtMoney(state.insurance.premium)}/月）`
       : '未投保';
@@ -339,6 +342,8 @@
         <div><dt>每月結餘</dt><dd class="${net >= 0 ? 'pos' : 'neg'}">${UI.fmtSigned(net)}</dd></div>
         <div><dt>現金</dt><dd>${UI.fmtMoney(state.cash)}</dd></div>
         <div><dt>股票市值</dt><dd>${UI.fmtMoney(stockValue())}</dd></div>
+        <div><dt>股市截至目前淨利</dt><dd class="${stockProfit >= 0 ? 'pos' : 'neg'}">${UI.fmtSigned(stockProfit)}</dd>
+          <dd class="info-sub">已實現 ${UI.fmtSigned(stats.realizedPnL)}・未實現 ${UI.fmtSigned(unrealized)}</dd></div>
         <div><dt>淨資產</dt><dd>${UI.fmtMoney(netWorth())}</dd></div>
         <div><dt>健康指數</dt><dd>${state.health} / 100</dd></div>
         <div><dt>已完成圈數</dt><dd>${state.lap} 圈</dd></div>

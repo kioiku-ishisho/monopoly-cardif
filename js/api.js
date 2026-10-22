@@ -35,6 +35,12 @@
     recordChoice(gameId, cardId, accepted) {
       return post(`/api/games/${gameId}/draws/${cardId}`, { accepted }).catch((e) => console.warn('記錄選擇失敗', e));
     },
+    // 全服排行榜 -> { top: [...], me }
+    async leaderboard() {
+      const res = await fetch(`${BASE}/api/leaderboard?playerId=${encodeURIComponent(Store.getPlayerId())}`);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    },
     // Claude 評分並寫入全服排行榜 -> { evaluation, rank }
     evaluate(gameId, record) {
       return post('/api/evaluate', { gameId, playerId: Store.getPlayerId(), record });

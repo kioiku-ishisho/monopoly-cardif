@@ -21,8 +21,8 @@
     return items;
   }
 
-  function cardHtml(card, { note = '', warn = false, extra = [] } = {}) {
-    const items = [...effectItems(card), ...extra];
+  function cardHtml(card, { note = '', warn = false, extra = [], hideEffects = false } = {}) {
+    const items = hideEffects ? [] : [...effectItems(card), ...extra];
     return `
       <div class="event-card" data-kind="${card.kind}">
         <div class="card-kind"><span>${GameData.tileTypes[card.kind].icon} ${KIND_LABEL[card.kind]}</span><span class="card-id">${UI.escape(card.id)}</span></div>
@@ -53,14 +53,10 @@
   async function chance(tile, ctx) {
     const card = await drawCard('chance', ctx);
     if (!card) return;
-    const after = ctx.state.cash + card.cash;
-    const warn = card.cash < 0 && after <= 0;
+    // 選擇前不透露效果，讓玩家依情境判斷
     const choice = await UI.modal({
       title: '抽到機會牌',
-      body: cardHtml(card, {
-        note: warn ? `接受後現金會變成 ${UI.fmtMoney(after)}，將導致破產！` : '你可以選擇接受或放棄，放棄則沒有任何影響。',
-        warn,
-      }),
+      body: cardHtml(card, { hideEffects: true, note: '要接受這個機會嗎？放棄則沒有任何影響。' }),
       actions: [
         { label: '放棄', value: 'decline', variant: 'ghost' },
         { label: '接受', value: 'accept', variant: 'primary' },
@@ -71,12 +67,46 @@
     API.recordChoice(ctx.gameId(), card.id, accepted);
     if (accepted) {
       ctx.stats.chanceAccepted++;
+      const before = { cash: ctx.state.cash, netIncomeAdj: ctx.state.netIncomeAdj, health: ctx.state.health };
       ctx.applyEffects(card, `接受機會：${card.text}`, '❓');
       ctx.logDecision(`接受「${card.text}」（${effectItems(card).join('、')}）`, 'chance-accept');
+      await showOutcome(card, before, ctx.state);
     } else {
       ctx.stats.chanceDeclined++;
       ctx.logDecision(`放棄「${card.text}」`, 'chance-decline');
+      UI.toast('已放棄這個機會，沒有任何影響');
     }
+  }
+
+  // 接受機會後，顯示各項數據的變化（之前 → 之後）
+  function showOutcome(card, before, after) {
+    const rows = [];
+    if (card.cash) rows.push(['💰 現金', UI.fmtMoney(before.cash), UI.fmtMoney(after.cash), UI.fmtSigned(card.cash), card.cash > 0]);
+    if (card.netIncome) {
+      rows.push(['📅 每月淨收入變化', `${UI.fmtSigned(before.netIncomeAdj)}/月`, `${UI.fmtSigned(after.netIncomeAdj)}/月`,
+        `${UI.fmtSigned(card.netIncome)}/月`, card.netIncome > 0]);
+    }
+    if (card.health) {
+      const diff = after.health - before.health;
+      rows.push(['❤️ 健康', before.health, after.health, `${diff >= 0 ? '+' : ''}${diff}`, diff >= 0]);
+    }
+    return UI.modal({
+      title: '機會結果',
+      body: `
+        <div class="event-card" data-kind="chance">
+          <p class="card-text">${UI.escape(card.text)}</p>
+          ${rows.length ? `
+            <table class="data-table outcome-table">
+              <caption class="sr-only">數據變化</caption>
+              <thead><tr><th scope="col">項目</th><th scope="col">之前</th><th scope="col">之後</th><th scope="col">變化</th></tr></thead>
+              <tbody>${rows.map(([name, b, a, d, good]) => `
+                <tr><th scope="row">${name}</th><td>${b}</td><td>${a}</td><td class="${good ? 'pos' : 'neg'}">${d}</td></tr>`).join('')}
+              </tbody>
+            </table>` : '<p class="card-note">沒有任何數據變化。</p>'}
+        </div>`,
+      actions: [{ label: '確定', value: 'ok', variant: 'primary' }],
+      dismissible: false,
+    });
   }
 
   async function fate(tile, ctx) {

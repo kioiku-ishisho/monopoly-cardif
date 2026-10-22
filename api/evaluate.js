@@ -5,8 +5,9 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { findCard } from './_lib/decks.js';
 import { db } from './_lib/firebase.js';
 import { GAME_ID, HttpError, PLAYER_ID, postHandler } from './_lib/http.js';
+import { rankOf } from './_lib/rank.js';
 
-const MODEL = process.env.CLAUDE_MODEL || 'claude-opus-5-5';
+const MODEL = process.env.CLAUDE_MODEL || 'claude-haiku-5-5';
 const DAILY_LIMIT = Number(process.env.EVAL_DAILY_LIMIT || 20); // 每位玩家每天最多評分幾局
 const MAX_RECORD_BYTES = 100_000;
 
@@ -29,6 +30,7 @@ const SYSTEM_PROMPT = `你是「人生富翁」理財教育遊戲的評審。玩
 - decisions：4～8 則決策回顧，type 為 good（好決策）、bad（待改進）或 info（中性紀錄），每則一句，盡量指出玩家實際做過的選擇。
 - advice：3～5 則具體、可在下一局實踐的理財建議，每則對應一個最相關的 tip。
 
+金額單位皆為新台幣元；salary、expense 是「每月」的薪資與支出，年薪 = salary × 12。
 只根據提供的資料判斷，不要臆測沒發生的事。`;
 
 const SCHEMA = {
@@ -118,12 +120,11 @@ async function askClaude(record, lines) {
     lines.join('\n') || '（無）',
   ].join('\n\n');
 
-  const msg = await claude().beta.messages.create(
+  // Haiku 沒有伺服器端備援模型；遭拒絕時由下方丟出錯誤，前端會改用本機評分
+  const msg = await claude().messages.create(
     {
       model: MODEL,
       max_tokens: 16000,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default', // 若遭安全分類器拒絕，由伺服器自動改用建議的備援模型
       output_config: { effort: 'medium', format: { type: 'json_schema', schema: SCHEMA } },
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content }],
@@ -152,19 +153,6 @@ function toEvaluation(out) {
     source: 'claude',
     model: MODEL,
   };
-}
-
-async function rankOf(playerId) {
-  const players = db().collection('players');
-  const me = await players.doc(playerId).get();
-  const best = me.get('bestScore') ?? 0;
-  const [above, total] = await Promise.all([
-    players.where('bestScore', '>', best).count().get(),
-    players.where('bestScore', '>=', 0).count().get(), // 只算有成績的玩家
-  ]);
-  const rank = above.data().count + 1;
-  const totalCount = Math.max(total.data().count, rank);
-  return { rank, total: totalCount, best, topPercent: Math.max(0.1, Math.round((rank / totalCount) * 1000) / 10) };
 }
 
 export default postHandler(async (req, body) => {
@@ -212,7 +200,15 @@ export default postHandler(async (req, body) => {
     tx.set(playerRef, {
       gamesEvaluated: FieldValue.increment(1),
       lastPlayedAt: FieldValue.serverTimestamp(),
-      ...(evaluation.score > best ? { bestScore: evaluation.score, bestGameId: gameId, bestAt: FieldValue.serverTimestamp() } : {}),
+      ...(evaluation.score > best ? {
+        bestScore: evaluation.score,
+        bestGrade: evaluation.grade,
+        bestGameId: gameId,
+        bestJobName: String(record.jobName || '').slice(0, 20),
+        bestJobIcon: String(record.jobIcon || '').slice(0, 8),
+        bestFinalAge: Number(record.finalAge) || null,
+        bestAt: FieldValue.serverTimestamp(),
+      } : {}),
     }, { merge: true });
   });
 

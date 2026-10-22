@@ -5,7 +5,7 @@
 - **前端**：純 HTML / CSS / JavaScript（不需建置）
 - **後端**：Vercel Serverless Functions（`api/`）
 - **資料庫**：Firebase Firestore（事件牌、每局抽牌紀錄、全服排行榜）
-- **AI 評分**：Claude API（`claude-opus-5-5`）
+- **AI 評分**：Claude API（`claude-haiku-5-5`）
 
 ```
 瀏覽器 ──► Vercel（靜態網頁 + /api/*）──► Firestore
@@ -74,7 +74,7 @@ vercel env add FIREBASE_SERVICE_ACCOUNT
 
 | 變數 | 預設 | 說明 |
 | --- | --- | --- |
-| `CLAUDE_MODEL` | `claude-opus-5-5` | AI 評分使用的模型 |
+| `CLAUDE_MODEL` | `claude-haiku-5-5` | AI 評分使用的模型 |
 | `EVAL_DAILY_LIMIT` | `20` | 每位玩家每天最多 AI 評分幾局（控制 API 費用） |
 
 ---
@@ -87,6 +87,7 @@ vercel env add FIREBASE_SERVICE_ACCOUNT
 | POST | `/api/games/:id/draw` | `{kind: "chance"\|"fate", stage}` → `{card}`；該階段抽完回傳 404 `exhausted` |
 | POST | `/api/games/:id/draws/:cardId` | `{accepted}`，記錄機會牌的選擇 |
 | POST | `/api/evaluate` | `{gameId, playerId, record}` → `{evaluation, rank}`，Claude 評分並寫入排行榜 |
+| GET | `/api/leaderboard?playerId=` | `{top, me}`：全服前 20 名（不含玩家 id，只標示自己）與自己的名次 |
 
 ### Firestore 資料結構
 
