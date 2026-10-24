@@ -17,11 +17,11 @@ const dryRun = process.argv.includes('--dry-run');
 const STAGES = { Y: 'youth', M: 'middle', O: 'elder' };
 const KINDS = { 機會: 'chance', 命運: 'fate' };
 const ROW = /^\|\s*([YMO])([1-6])-(\d{2})\s*\|(.+?)\|(.+?)\|\s*(機會|命運)\s*\|\s*$/;
-const EFFECT = /(現金|淨收入|健康)\s*([+\-−])\s*([\d,]+)/; // 「−」(U+2212) 也算負號
-const FIELD = { 現金: 'cash', 淨收入: 'netIncome', 健康: 'health' };
+const EFFECT = /(現金|淨收入|健康|幸福)\s*([+\-−])\s*([\d,]+)/; // 「−」(U+2212) 也算負號
+const FIELD = { 現金: 'cash', 淨收入: 'netIncome', 健康: 'health', 幸福: 'happiness' };
 
 function parseEffects(text, id) {
-  const eff = { cash: 0, netIncome: 0, health: 0 };
+  const eff = { cash: 0, netIncome: 0, health: 0, happiness: 0 };
   for (const part of text.split(/[；;]/).map((s) => s.trim()).filter(Boolean)) {
     const m = part.match(EFFECT);
     if (!m) throw new Error(`${id} 無法解析影響「${part}」`);

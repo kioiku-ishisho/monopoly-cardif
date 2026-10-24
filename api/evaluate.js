@@ -16,7 +16,7 @@ const MAX_POINTS = { longevity: 30, wealth: 35, health: 15, riskManagement: 10, 
 // 需與 js/data.js 的 tips id 一致（結算頁會依此解鎖提示）
 const TIP_IDS = ['emergency', 'rule72', 'diversify', 'insurance', 'compound', 'healthwealth', 'retirement', 'budget', 'dca', 'panic'];
 
-const SYSTEM_PROMPT = `你是「人生富翁」理財教育遊戲的評審。玩家從 25 歲開始，以某個職業走過青年、中年、老年，透過機會牌（可選擇）、命運牌（無法選擇）、保險與股票投資做財務決策。遊戲在破產、健康歸零或活到 100 歲時結束。
+const SYSTEM_PROMPT = `你是「人生富翁」理財教育遊戲的評審。玩家從 25 歲開始，以某個職業走過青年、中年、老年，透過機會牌（可選擇）、命運牌（無法選擇）、保險與股票投資做財務決策。遊戲在破產、健康歸零、幸福歸零（unhappy，失去生活動力）或活到 100 歲時結束。幸福指數 0–100 約等於心理健康，由人際、休閒、壓力、悲傷等事件增減。
 
 保險有十一種可投保：定期壽險、意外險、醫療險（實支實付）、重大傷病險、特定傷病險、癌症險、長照險、投資型保險、住院日額險、終身壽險（分紅）、年金險；另有開局隨機取得、已繳清的舊保單（policies 裡 legacy 為 true，保障偏低，不是玩家自己買的）。保費每月扣款，繳不出會停效。健康 ≤ 30 會進入長照狀態，每月多 3 萬照護費。退休後收入只剩月薪 40%，年金險可以補退休缺口。身故時壽險等給付計入 legacy（留給家人），不算玩家自己的淨資產。
 
@@ -25,7 +25,7 @@ const SYSTEM_PROMPT = `你是「人生富翁」理財教育遊戲的評審。玩
 - wealth（0–35）：最終淨資產相對年薪的倍數（wealthRatio）；破產為 0，約 20 倍年薪以上接近滿分。高薪職業不應只因薪水高而得高分。
 - health（0–15）：平均健康指數與健康相關選擇。
 - riskManagement（0–10）：保險組合是否涵蓋主要風險（醫療、重大傷病、長照、退休）、是否及早投保、保費是否符合雙十原則（maxPremiumRatio 約 0.1，明顯超過或停效都要扣分）、是否分散投資、有沒有被迫賣股、面對機會牌時是否權衡風險。
-- ending（0–10）：活到 100 歲 10 分；65 歲後健康耗盡約 6 分；65 歲前約 2 分；破產 0 分。
+- ending（0–10）：活到 100 歲 10 分；65 歲後健康耗盡約 6 分；65 歲前約 2 分；幸福歸零 65 歲後約 4 分、65 歲前約 1 分；破產 0 分。
 
 接著用繁體中文（台灣用語）撰寫：
 - summary：3～5 句的人生總結，引用具體數字與事件，語氣溫暖但誠實。
@@ -86,7 +86,7 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 // 只挑評分需要的欄位，避免把整份紀錄原封不動送出
 function facts(r) {
   const pick = ['jobName', 'salary', 'expense', 'endReason', 'endReasonText', 'finalAge', 'finalStage', 'finalCash',
-    'finalHealth', 'stockValue', 'netWorth', 'peakNetWorth', 'avgHealth', 'minHealth', 'laps', 'turns', 'trades',
+    'finalHealth', 'finalHappiness', 'avgHappiness', 'minHappiness', 'stockValue', 'netWorth', 'peakNetWorth', 'avgHealth', 'minHealth', 'laps', 'turns', 'trades',
     'distinctStocks', 'realizedPnL', 'forcedSales', 'netIncomeAdj', 'insured', 'firstInsuredAge', 'policies',
     'premiumsPaid', 'monthlyPremium', 'maxPremiumRatio', 'policyValue', 'legacy', 'legacyItems', 'medicalHistory',
     'majorIllness', 'ltcAge', 'chanceAccepted', 'chanceDeclined', 'fateCount', 'claims', 'claimTotal', 'holdings'];
@@ -99,6 +99,7 @@ const fmtEffect = (c) => [
   c.cash && `現金${c.cash > 0 ? '+' : ''}${c.cash}`,
   c.netIncome && `淨收入${c.netIncome > 0 ? '+' : ''}${c.netIncome}/月`,
   c.health && `健康${c.health > 0 ? '+' : ''}${c.health}`,
+  c.happiness && `幸福${c.happiness > 0 ? '+' : ''}${c.happiness}`,
 ].filter(Boolean).join('、');
 
 // 伺服器端記錄的抽牌與選擇（比前端紀錄可信）

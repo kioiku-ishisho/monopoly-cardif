@@ -43,7 +43,7 @@
   $('#btn-leaderboard').addEventListener('click', () => Leaderboard.open());
 
   // ---- 歷史遊玩紀錄 ----
-  const END_LABEL = { bankrupt: '破產', death: '健康耗盡', maxAge: '壽終正寢' };
+  const END_LABEL = { bankrupt: '破產', death: '健康耗盡', unhappy: '幸福歸零', maxAge: '壽終正寢' };
 
   $('#dlg-history').addEventListener('beforeopen', () => {
     const list = Store.getHistory();

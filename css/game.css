@@ -274,7 +274,7 @@
 .player-summary {
   width: 100%;
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
+  grid-template-columns: 1.2fr 1fr 1fr auto;
   align-items: center;
   gap: 12px;
   min-height: 56px;
@@ -290,6 +290,11 @@
 .stat-label { font-size: 0.8rem; color: var(--text-muted); font-weight: 700; }
 .stat-value { font-size: 1.25rem; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .stat .meter { width: 100%; max-width: 160px; }
+.meter.happy > span { background: #f08c00; }
+@media (max-width: 420px) {
+  .player-summary { gap: 8px; }
+  .stat-value { font-size: 1.05rem; }
+}
 .sheet-hint { color: var(--text-muted); }
 
 .sheet-scrim {

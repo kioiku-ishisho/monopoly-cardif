@@ -16,11 +16,12 @@
 (function () {
   const KIND_LABEL = { chance: '機會', fate: '命運', hospital: '住院' };
 
-  function effectItems({ cash, netIncome, health }) {
+  function effectItems({ cash, netIncome, health, happiness }) {
     const items = [];
     if (cash) items.push(`💰 現金 ${UI.fmtSigned(cash)}`);
     if (netIncome) items.push(`📅 淨收入 ${UI.fmtSigned(netIncome)}/月`);
     if (health) items.push(`❤️ 健康 ${health > 0 ? '+' : ''}${health}`);
+    if (happiness) items.push(`😊 幸福 ${happiness > 0 ? '+' : ''}${happiness}`);
     return items;
   }
 
@@ -70,7 +71,7 @@
     API.recordChoice(ctx.gameId(), card.id, accepted);
     if (accepted) {
       ctx.stats.chanceAccepted++;
-      const before = { cash: ctx.state.cash, netIncomeAdj: ctx.state.netIncomeAdj, health: ctx.state.health };
+      const before = { cash: ctx.state.cash, netIncomeAdj: ctx.state.netIncomeAdj, health: ctx.state.health, happiness: ctx.state.happiness };
       ctx.applyEffects(card, `接受機會：${card.text}`, '❓');
       ctx.logDecision(`接受「${card.text}」（${effectItems(card).join('、')}）`, 'chance-accept');
       await showOutcome(card, before, ctx.state);
@@ -92,6 +93,10 @@
     if (card.health) {
       const diff = after.health - before.health;
       rows.push(['❤️ 健康', before.health, after.health, `${diff >= 0 ? '+' : ''}${diff}`, diff >= 0]);
+    }
+    if (card.happiness) {
+      const diff = after.happiness - before.happiness;
+      rows.push(['😊 幸福', before.happiness, after.happiness, `${diff >= 0 ? '+' : ''}${diff}`, diff >= 0]);
     }
     return UI.modal({
       title: '機會結果',
@@ -121,7 +126,7 @@
 
   // 重大疾病（js/game.js 依年齡與健康觸發）
   async function illness(ev, ctx) {
-    const card = { kind: 'fate', id: '重大疾病', cash: 0, netIncome: 0, health: 0, ...ev };
+    const card = { kind: 'fate', id: '重大疾病', cash: 0, netIncome: 0, health: 0, happiness: 0, ...ev };
     await resolveFate(card, ctx, { title: '🚑 健康警訊', tag: ev.tag });
   }
 

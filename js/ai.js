@@ -37,7 +37,7 @@
     if (r.forcedSales > 0) invest -= 3;
     invest = clamp(invest, 0, 10);
     // 結局（10）
-    const ending = { maxAge: 10, death: r.finalAge >= 65 ? 6 : 2, bankrupt: 0 }[r.endReason] ?? 0;
+    const ending = { maxAge: 10, death: r.finalAge >= 65 ? 6 : 2, unhappy: r.finalAge >= 65 ? 4 : 1, bankrupt: 0 }[r.endReason] ?? 0;
 
     const score = Math.round(longevity + wealth + health + invest + ending);
     const grade = gradeOf(score);
@@ -46,6 +46,7 @@
     const endPhrase = {
       bankrupt: `在 ${r.finalAge} 歲時因現金耗盡而破產`,
       death: `在 ${r.finalAge} 歲時因健康耗盡而離世`,
+      unhappy: `在 ${r.finalAge} 歲時因幸福指數歸零、失去生活動力而結束`,
       maxAge: `平安走到 ${r.finalAge} 歲，享壽百歲`,
     }[r.endReason];
     const summary = [

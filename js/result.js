@@ -75,6 +75,7 @@
       ['保險理賠', UI.fmtMoney(record.claimTotal || 0)],
       ...(record.legacy ? [['留給家人', UI.fmtMoney(record.legacy)]] : []),
       ['平均健康', `${record.avgHealth} / 100`],
+      ...(record.avgHappiness != null ? [['平均幸福', `${record.avgHappiness} / 100`]] : []),
       ['回合數', `${record.turns} 回合`],
     ];
     $('#stat-grid').innerHTML = stats.map(([k, v]) => `<div><dt>${k}</dt><dd>${UI.escape(v)}</dd></div>`).join('');

@@ -15,6 +15,7 @@
   const state = {
     cash: job.salary * E.startCashMonths,
     health: 100,
+    happiness: E.startHappiness,
     steps: 0, // 總步數，一步 = 3 個月
     position: 0,
     lap: 0, // 已完成圈數
@@ -44,6 +45,8 @@
     minHealth: 100,
     healthSum: 0,
     healthSamples: 0,
+    minHappiness: E.startHappiness,
+    happinessSum: 0,
     trades: 0,
     boughtIds: new Set(),
     realizedPnL: 0,
@@ -350,6 +353,10 @@
     meter.querySelector('span').style.width = state.health + '%';
     meter.classList.toggle('warn', state.health <= 50 && state.health > 25);
     meter.classList.toggle('danger', state.health <= 25);
+    $('#sum-happiness').textContent = `${state.happiness} / 100`;
+    const hm = $('#sum-happiness-meter');
+    hm.querySelector('span').style.width = state.happiness + '%';
+    hm.classList.toggle('danger', state.happiness <= 25);
     // 圈數以「這個階段的第幾圈」顯示
     const lapsBefore = D.stages.slice(0, state.stageIndex).reduce((sum, s) => sum + s.laps, 0);
     const lapsTotal = stage().laps === Infinity ? '' : ` / ${stage().laps}`;
@@ -410,6 +417,8 @@
         <div><dt>健康指數</dt><dd>${state.health} / 100</dd>
           ${state.ltc ? '<dd class="info-sub neg">長照狀態</dd>' : ''}
           ${state.medicalHistory.length ? `<dd class="info-sub">病史：${state.medicalHistory.map((t) => Insurance.TAG_NAME[t]).join('、')}</dd>` : ''}</div>
+        <div><dt>幸福指數</dt><dd>${state.happiness} / 100</dd>
+          <dd class="info-sub${state.happiness <= 25 ? ' neg' : ''}">${state.happiness <= 25 ? '心情低落，再低下去會失去生活動力' : '約等於心理健康，歸零時遊戲結束'}</dd></div>
         <div><dt>已完成圈數</dt><dd>${state.lap} 圈</dd></div>
         <div><dt>回合數</dt><dd>${state.turn}</dd></div>
       </dl>
@@ -774,15 +783,17 @@
       actions: options.map((o, i) => ({ label: o.label, value: o.value, variant: i === 0 ? 'primary' : 'ghost' })).reverse(),
       dismissible: false,
     }),
-    // 一次套用多種影響，只記一筆歷史事件；effects: { cash, netIncome, health }
-    applyEffects({ cash = 0, netIncome = 0, health = 0 }, reason, icon = '🎲') {
+    // 一次套用多種影響，只記一筆歷史事件；effects: { cash, netIncome, health, happiness }
+    applyEffects({ cash = 0, netIncome = 0, health = 0, happiness = 0 }, reason, icon = '🎲') {
       state.cash = Math.round(state.cash + cash);
       state.netIncomeAdj = Math.round(state.netIncomeAdj + netIncome);
       state.health = clamp(Math.round(state.health + health), 0, 100);
+      state.happiness = clamp(Math.round(state.happiness + (happiness || 0)), 0, 100);
       const parts = [];
       if (cash) parts.push(`現金 ${UI.fmtSigned(cash)}`);
       if (netIncome) parts.push(`淨收入 ${UI.fmtSigned(netIncome)}/月`);
       if (health) parts.push(`健康 ${health > 0 ? '+' : ''}${health}`);
+      if (happiness) parts.push(`幸福 ${happiness > 0 ? '+' : ''}${happiness}`);
       addHistory('life', icon, parts.length ? `${reason}（${parts.join('、')}）` : reason);
       renderStatus();
     },
@@ -927,6 +938,8 @@
     stats.minHealth = Math.min(stats.minHealth, state.health);
     stats.healthSum += state.health;
     stats.healthSamples++;
+    stats.minHappiness = Math.min(stats.minHappiness, state.happiness);
+    stats.happinessSum += state.happiness;
     renderStatus();
 
     if (await checkEnd()) return;
@@ -939,12 +952,15 @@
   async function maybeMajorIllness(months) {
     if (state.health <= 0) return;
     const cfg = D.majorIllness;
-    let rate = Insurance.interp(cfg.annualRate, age());
+    // 職業倍率：心血管疾病（心肌梗塞、腦中風）依 job.risk.heart 調整，發生率與病種比例一起變
+    const weightOf = (ev) => ev.weight * (['heart', 'stroke'].includes(ev.tag) ? job.risk.heart || 1 : 1);
+    const baseWeight = cfg.events.reduce((s, ev) => s + ev.weight, 0);
+    const totalWeight = cfg.events.reduce((s, ev) => s + weightOf(ev), 0);
+    let rate = Insurance.interp(cfg.annualRate, age()) * (totalWeight / baseWeight);
     if (state.health < 70) rate *= 1 + ((70 - state.health) / 10) * 0.2;
     if (Math.random() >= (rate * months) / 12) return;
-    const totalWeight = cfg.events.reduce((s, ev) => s + ev.weight, 0);
     let r = Math.random() * totalWeight;
-    const ev = cfg.events.find((x) => (r -= x.weight) < 0) || cfg.events[0];
+    const ev = cfg.events.find((x) => (r -= weightOf(x)) < 0) || cfg.events[0];
     stats.majorIllness++;
     await TileEvents.illness(ev, ctx);
     renderStatus();
@@ -979,6 +995,7 @@
     let reason = null;
     if (state.cash <= 0) reason = 'bankrupt';
     else if (state.health <= 0) reason = 'death';
+    else if (state.happiness <= 0) reason = 'unhappy';
     else if (age() >= E.maxAge) reason = 'maxAge';
     if (!reason) return false;
     await endGame(reason);
@@ -988,6 +1005,7 @@
   const END_TEXT = {
     bankrupt: { title: '破產了…', icon: '💸', msg: (a) => `你在 ${a} 歲時現金歸零，宣告破產。` },
     death: { title: '健康指數歸零', icon: '🕯️', msg: (a) => `你在 ${a} 歲時健康耗盡，人生畫下句點。` },
+    unhappy: { title: '幸福指數歸零', icon: '🌧️', msg: (a) => `你在 ${a} 歲時失去了生活的動力，人生停在這裡。` },
     maxAge: { title: '壽終正寢', icon: '🎉', msg: (a) => `你平安活到 ${a} 歲，走完了精彩的一生！` },
   };
 
@@ -1020,6 +1038,9 @@
       peakNetWorth: Math.round(stats.peakNetWorth),
       minHealth: stats.minHealth,
       avgHealth: stats.healthSamples ? Math.round(stats.healthSum / stats.healthSamples) : state.health,
+      finalHappiness: state.happiness,
+      minHappiness: stats.minHappiness,
+      avgHappiness: stats.healthSamples ? Math.round(stats.happinessSum / stats.healthSamples) : state.happiness,
       laps: state.lap,
       turns: state.turn,
       trades: stats.trades,
