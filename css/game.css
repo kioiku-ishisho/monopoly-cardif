@@ -485,6 +485,30 @@
 .product-summary { font-weight: 700; margin-bottom: 8px; }
 .product-card .effect-list li { font-size: 0.8rem; padding: 2px 10px; font-weight: 500; }
 .product-premium { margin: 10px 0 0; font-size: 0.9rem; }
+.product-card { display: flex; flex-direction: column; }
+.product-quote { margin: 10px 0 0; padding-top: 10px; border-top: 1px dashed var(--border); font-size: 0.95rem; }
+.product-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: auto; padding-top: 10px; }
+.policy-perk { margin: 0 0 4px; padding: 8px 12px; border-radius: var(--radius-sm); border: 2px solid #0ca678; font-weight: 700; }
 
 /* 提示訊息放在市場跑馬燈下方，避免蓋住 */
 .page-game .toast-region { top: 132px; }
+
+/* ===== AI 保險業務員對話 ===== */
+.agent-chat .modal-body { display: flex; flex-direction: column; gap: 10px; }
+.chat-log { list-style: none; margin: 0; padding: 4px; display: flex; flex-direction: column; gap: 10px; max-height: min(46vh, 420px); overflow-y: auto; }
+.chat-msg { max-width: 88%; padding: 10px 14px; border-radius: 14px; line-height: 1.6; }
+.chat-msg.agent { align-self: flex-start; background: color-mix(in srgb, #1c7ed6 10%, var(--surface)); border: 1px solid color-mix(in srgb, #1c7ed6 35%, var(--border)); border-bottom-left-radius: 4px; }
+.chat-msg.user { align-self: flex-end; background: var(--primary); color: var(--on-primary); border-bottom-right-radius: 4px; }
+.chat-msg.error { border-color: var(--danger); }
+.chat-msg.typing .dots { display: inline-block; font-weight: 900; letter-spacing: 0.2em; animation: chat-blink 1s infinite; }
+@keyframes chat-blink { 50% { opacity: 0.3; } }
+.chat-rec { margin-top: 10px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--border); display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; }
+.chat-rec > div { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.chat-rec p { grid-column: 1; margin: 0; font-size: 0.9rem; color: var(--text-muted); }
+.chat-rec button { grid-column: 2; grid-row: 1 / span 2; }
+.chat-rec-price { font-size: 0.85rem; color: var(--text-muted); }
+.chat-suggest { display: flex; flex-wrap: wrap; gap: 6px; }
+.chat-form { display: flex; gap: 8px; }
+.chat-form input { flex: 1; min-width: 0; min-height: 44px; padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; }
+.chat-meta { margin: 0; font-size: 0.8rem; color: var(--text-muted); }
+@media (prefers-reduced-motion: reduce) { .chat-msg.typing .dots { animation: none; } }

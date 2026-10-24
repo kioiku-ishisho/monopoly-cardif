@@ -98,7 +98,7 @@
     myth: { win: 2000, lose: -2000 },
     mentor: { steps: 3 },
     promo: { rate: 0.2, cap: 2000 }, // 下一次投保首年保費折抵 20%，上限 2,000
-    attic: { cash: 5000 }, // 暫定：初始保單池完成前先給現金（改版計畫 P2）
+    attic: { cash: 5000 }, // 舊保單都抽完時改給現金
     missed: { surcharge: 1000 }, // 下一次投保額外支付
   };
 
@@ -178,6 +178,23 @@
         note: '保費扣除費用後買進台灣50 ETF：前 5 年扣 25%，之後扣 3%。可隨時停繳或解約，前 5 年解約再扣帳戶 10%。',
       },
       {
+        id: 'daily', name: '住院日額險', icon: '🛏️', pricing: 'natural', premium: { 25: 350, 40: 550, 55: 950, 65: 1500 },
+        maxEntryAge: 65, coverUntilAge: 85, waitMonths: 1, minHealth: 40,
+        covers: ['accident', 'hospital', 'cancer', 'heart', 'stroke'], benefit: { perDay: 2000, maxDays: 30 },
+        summary: '住院每天給付 2,000，每次最多 30 天',
+        note: '依住院天數給付，和實際花多少醫藥費無關，可以和實支實付醫療險同時理賠；一年期自然費率，意外住院不用等待期。',
+      },
+      {
+        id: 'wholelife', name: '終身壽險（分紅）', icon: '🌳', pricing: 'level', premium: { 25: 980, 40: 1700, 55: 3100 },
+        maxEntryAge: 60, payMonths: 240, coverUntilAge: Infinity, waitMonths: 0, minHealth: 40,
+        surcharges: [{ below: 50, rate: 0.6 }, { below: 70, rate: 0.3 }],
+        benefit: { death: 1000000 },
+        // 解約金 = 累計已繳保費 × 倍數（依保單年度內插），曲線參考富邦美好外幣分紅終身壽險建議書（預估值）
+        cashValue: { 0: 0, 1: 0, 2: 0.28, 3: 0.38, 5: 0.48, 10: 0.83, 15: 1.08, 20: 1.25, 30: 1.91, 40: 2.89, 50: 4.29, 60: 6.2, 75: 11 },
+        summary: '身故給付 100 萬與解約金取高，繳 20 年保障終身',
+        note: '有儲蓄成分，保費比定期壽險貴很多；前幾年解約領回的錢少於已繳保費。紅利為預估值，不保證。',
+      },
+      {
         id: 'annuity', name: '年金險', icon: '🏦', pricing: 'amount', amounts: [3000, 5000, 10000],
         maxEntryAge: 60, payUntilAge: 65, coverUntilAge: Infinity, waitMonths: 0, minHealth: 0, surcharges: [],
         rate: 0.02, payoutAge: 65, guaranteeMonths: 240, surrenderByYear: [0.06, 0.05, 0.04, 0.03, 0.02, 0.01],
@@ -185,6 +202,44 @@
         note: '不用核保；65 歲前身故退還帳戶價值，前 6 年解約扣 6%～1%。',
       },
     ],
+    // 初始保單：父母過去買的舊保單，開局時抽，已繳清；保障偏低，不能再購買
+    //   claimType：理賠方式（未設定時依 id），legacy：不出現在投保清單
+    legacy: [
+      {
+        id: 'old-life', name: '小額終身壽險', icon: '🕊️', claimType: 'life', coverUntilAge: Infinity, waitMonths: 0,
+        benefit: { death: 500000 }, surrenderFlat: 30000,
+        summary: '身故給付 50 萬，已繳清', note: '父母在你小時候買的終身壽險，保額不高；解約可領回 3 萬。',
+      },
+      {
+        id: 'old-daily', name: '舊型住院日額', icon: '🛏️', claimType: 'daily', coverUntilAge: 75, waitMonths: 0,
+        covers: ['accident', 'hospital', 'cancer', 'heart', 'stroke'], benefit: { perDay: 1000, maxDays: 30 },
+        summary: '住院每天 1,000，每次最多 30 天，保到 75 歲', note: '早期的住院日額保單，日額偏低，跟不上現在的醫療費。',
+      },
+      {
+        id: 'old-accident', name: '學生團保延續意外險', icon: '🦺', claimType: 'accident', coverUntilAge: 40, waitMonths: 0,
+        covers: ['accident'], benefit: { medicalMax: 10000 },
+        summary: '意外醫療每次最多 1 萬，保到 40 歲', note: '學生時期團保轉成的個人保單，沒有意外身故給付。',
+      },
+      {
+        id: 'old-cancer', name: '舊型防癌險', icon: '🔬', claimType: 'lump', coverUntilAge: Infinity, waitMonths: 0,
+        covers: ['cancer'], benefit: { lumpSum: 100000 },
+        summary: '確診癌症一次給付 10 萬', note: '早期的防癌險，給付金額以現在的治療費來看偏低。',
+      },
+      {
+        id: 'old-surgery', name: '手術險', icon: '🩹', claimType: 'surgery', coverUntilAge: 80, waitMonths: 0,
+        covers: ['accident', 'cancer', 'heart', 'stroke'], benefit: { perSurgery: 20000, minCost: 20000 },
+        summary: '醫藥費 2 萬以上的意外或重大疾病，每次給付 2 萬', note: '只在需要手術（遊戲中以醫藥費 ≥ 2 萬判斷）時給付。',
+      },
+    ],
+    // 開局的保單類型：依 weight 抽，再從 legacy 隨機抽 count 張不同保單
+    starting: [
+      { name: '無保單型', weight: 25, count: 0 },
+      { name: '基礎保障型', weight: 35, count: 1 },
+      { name: '一般保障型', weight: 30, count: 2 },
+      { name: '進階保障型', weight: 10, count: 3 },
+    ],
+    // 建議書試算：投資型保險假設的年報酬
+    illustrateReturn: 0.04,
   };
 
   // 命運牌的疾病標籤，保險依標籤判斷是否理賠

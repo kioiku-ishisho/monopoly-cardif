@@ -456,9 +456,25 @@
   }
 
   async function onPolicyAction(e) {
-    const btn = e.target.closest('[data-policy-cancel],[data-policy-stop]');
-    if (!btn || state.over) return;
-    if (btn.dataset.policyStop) {
+    const btn = e.target.closest('[data-policy-cancel],[data-policy-stop],[data-buy-product],[data-proposal]');
+    if (!btn) return;
+    if (btn.dataset.proposal) { openProposal(btn.dataset.proposal); return; }
+    if (state.over) return;
+    if (btn.dataset.buyProduct) {
+      const prod = Insurance.PRODUCTS[btn.dataset.buyProduct];
+      const q = Ins.quote(prod);
+      if (!q.ok) { UI.toast(q.reason); return; }
+      if (!prod.amounts) {
+        const ok = await UI.confirm({
+          title: `投保${prod.name}`,
+          message: `每月保費 ${UI.fmtMoney(q.premium)}，${Insurance.payTermText(prod)}，${Insurance.coverText(prod)}。確定投保嗎？`,
+          okText: '投保',
+          cancelText: '再想想',
+        });
+        if (!ok) return;
+      }
+      if (!(await TileEvents.purchase(prod, ctx))) return;
+    } else if (btn.dataset.policyStop) {
       Ins.toggleStop(Number(btn.dataset.policyStop));
     } else {
       const uid = Number(btn.dataset.policyCancel);
@@ -497,8 +513,9 @@
     return Object.entries(p.premium).map(([a, v]) => `${a} 歲 ${UI.fmtMoney(v)}`).join('、') + '（每月）';
   }
 
-  function productCard(p, owned) {
-    const chips = [
+  // shop：在「全部險種」分頁顯示目前的報價與投保、建議書按鈕
+  function productCard(p, owned, shop = false) {
+    const chips = p.legacy ? ['已繳清', Insurance.coverText(p)] : [
       PRICING_TEXT[p.pricing],
       Insurance.payTermText(p),
       Insurance.coverText(p),
@@ -506,14 +523,36 @@
       `${p.maxEntryAge} 歲前可投保`,
       p.minHealth ? `健康需 ≥ ${p.minHealth}` : '不需核保',
     ];
+    let quote = '';
+    if (shop) {
+      const q = Ins.quote(p);
+      const price = !q.ok ? `<span class="neg">無法投保：${UI.escape(q.reason)}</span>`
+        : p.amounts ? '你可以自選月繳金額'
+        : `你現在投保：每月 <strong>${UI.fmtMoney(q.premium)}</strong>${q.surcharge > 1 ? `（健康加費 ${Math.round((q.surcharge - 1) * 100)}%）` : ''}`;
+      quote = `
+        <p class="product-quote">${price}</p>
+        <div class="product-actions">
+          <button class="btn btn-sm btn-ghost" type="button" data-proposal="${p.id}">📄 建議書</button>
+          <button class="btn btn-sm btn-primary" type="button" data-buy-product="${p.id}" ${!q.ok || state.over ? 'disabled' : ''}>投保</button>
+        </div>`;
+    }
     return `
       <article class="product-card${owned ? ' owned' : ''}">
-        <h3><span aria-hidden="true">${p.icon}</span> ${UI.escape(p.name)}${owned ? ' <span class="owned-badge">已投保</span>' : ''}</h3>
+        <h3><span aria-hidden="true">${p.icon}</span> ${UI.escape(p.name)}${owned ? ` <span class="owned-badge">${p.legacy ? '舊保單' : '已投保'}</span>` : ''}</h3>
         <p class="product-summary">${UI.escape(p.summary)}</p>
         <ul class="effect-list">${chips.map((c) => `<li>${UI.escape(c)}</li>`).join('')}</ul>
-        <p class="product-premium">保費：${UI.escape(premiumText(p))}</p>
+        ${p.legacy ? '' : `<p class="product-premium">保費表：${UI.escape(premiumText(p))}</p>`}
         <p class="card-note">${UI.escape(p.note)}</p>
+        ${quote}
       </article>`;
+  }
+
+  // 建議書（可列印成 PDF）：依目前年齡、職業、健康加費試算
+  function openProposal(id) {
+    const prod = Insurance.PRODUCTS[id];
+    const q = Ins.quote(prod);
+    const params = new URLSearchParams({ product: id, age: ageInt(), job: job.id, surcharge: q.surcharge || 1 });
+    window.open(`proposal.html?${params}`, '_blank');
   }
 
   function renderPolicyDialog() {
@@ -530,16 +569,19 @@
         ${mine.length ? `<h3 class="policy-h">保障內容</h3><div class="product-list">${mine.map((p) => productCard(p, true)).join('')}</div>` : ''}`;
     } else {
       $('#policy-body').innerHTML = `
+        ${perkText() ? `<p class="policy-perk">${UI.escape(perkText())}</p>` : ''}
         <h3 class="policy-h">通用規則</h3>
         <ul class="rule-list">
-          <li>踩到「保險業務員」格時，業務員會隨機介紹 ${cfg.offerCount} 種險種，可以選擇投保或略過。</li>
+          <li>隨時都可以在這裡自己閱讀條款並投保；踩到「保險業務員」格時，業務員會介紹適合你的險種並回答問題。</li>
+          <li>每個險種都有「建議書」，列出逐年的保費、身故給付與解約金，可以列印或另存成 PDF。</li>
+          <li>保單可以隨時解約，有解約金的會領回現金，保障立即結束。</li>
           <li>保費與生活費一起每月扣款；現金不足時有 ${cfg.graceMonths} 個月寬限期，之後仍繳不出就停效。</li>
           <li>雙十原則：保費總額建議不超過月薪的 ${Math.round(cfg.budgetRate * 100)}%。</li>
           <li>健康降到 ${cfg.ltc.health} 以下會進入長照狀態，之後每月多 ${UI.fmtMoney(cfg.ltc.careCost)} 照護費。</li>
           <li>健康較差時投保可能加費或被拒保；有等待期的險種，生效前發生的事故不理賠。</li>
         </ul>
-        <h3 class="policy-h">險種一覽</h3>
-        <div class="product-list">${products.map((p) => productCard(p, ownedIds.has(p.id))).join('')}</div>`;
+        <h3 class="policy-h">全部險種</h3>
+        <div class="product-list">${products.filter((p) => !p.legacy).map((p) => productCard(p, ownedIds.has(p.id), true)).join('')}</div>`;
     }
   }
 
@@ -1058,8 +1100,32 @@
   requestAnimationFrame(() => fitBoard(false));
   announce('');
 
+  // 開局保單類型與初始保單（父母買的舊保單）
+  async function showStartingPolicies() {
+    const { tier, policies } = Ins.rollStarting();
+    renderStatus();
+    const list = policies.map((p) => {
+      const prod = Insurance.PRODUCTS[p.id];
+      return `<li><strong>${prod.icon} ${UI.escape(prod.name)}</strong>：${UI.escape(prod.summary)}</li>`;
+    }).join('');
+    await UI.alert({
+      title: '🗂️ 你的保險現況',
+      html: `
+        <div class="event-card" data-kind="insurance">
+          <p class="card-text">你的保單類型是「<strong>${tier.name}</strong>」。</p>
+          ${policies.length
+            ? `<p>父母過去替你買了 ${policies.length} 張保單，已經繳清，不用再繳保費：</p><ul>${list}</ul>
+               <p class="card-note">這些舊保單保障偏低，可以在右上角「保險」查看，或之後自己補強。</p>`
+            : '<p class="card-note">你目前沒有任何保單。可以在右上角「保險」閱讀各險種條款並投保，或等保險業務員來介紹。</p>'}
+        </div>`,
+      okText: '開始人生',
+      dismissible: false,
+    });
+  }
+
   // 向伺服器建立本局，之後的抽牌都以此 id 避免重複
   setDiceEnabled(false);
+  const starting = showStartingPolicies();
   API.createGame(job.id)
     .then((id) => { state.gameId = id; })
     .catch(async () => {
@@ -1068,5 +1134,5 @@
         message: '機會與命運牌、AI 評分與全服排名都需要伺服器。目前仍可遊玩，但抽不到牌，結算也會改用本機評分。',
       });
     })
-    .finally(() => setDiceEnabled(true));
+    .finally(() => starting.then(() => setDiceEnabled(true)));
 })();

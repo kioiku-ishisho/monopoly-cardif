@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>人生富翁｜保險建議書</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+  <script>
+    try {
+      var s = JSON.parse(localStorage.getItem('lf.settings') || '{}');
+      var t = s.theme || 'system';
+      if (t === 'system') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.dataset.theme = t;
+    } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/proposal.css">
+</head>
+<body class="page-proposal">
+  <div class="proposal-toolbar" role="toolbar" aria-label="建議書操作">
+    <label class="amount-pick" id="amount-pick" hidden>月繳金額
+      <select id="amount-select"></select>
+    </label>
+    <button class="btn btn-primary" type="button" id="btn-print">列印／另存 PDF</button>
+    <button class="btn btn-ghost" type="button" id="btn-close">關閉</button>
+  </div>
+  <main class="paper" id="paper"></main>
+
+  <script src="js/storage.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/insurance.js"></script>
+  <script src="js/proposal.js"></script>
+</body>
+</html>

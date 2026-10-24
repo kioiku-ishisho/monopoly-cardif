@@ -41,6 +41,10 @@
       if (!res.ok) throw new Error('HTTP ' + res.status);
       return res.json();
     },
+    // 保險業務員對話 -> { reply, recommendations: [{ productId, amount, reason }] }
+    agent(gameId, context, messages) {
+      return post('/api/agent', { gameId, playerId: Store.getPlayerId(), context, messages });
+    },
     // Claude 評分並寫入全服排行榜 -> { evaluation, rank }
     evaluate(gameId, record) {
       return post('/api/evaluate', { gameId, playerId: Store.getPlayerId(), record });

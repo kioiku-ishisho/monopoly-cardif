@@ -76,6 +76,7 @@ vercel env add FIREBASE_SERVICE_ACCOUNT
 | --- | --- | --- |
 | `CLAUDE_MODEL` | `claude-haiku-5-5` | AI 評分使用的模型 |
 | `EVAL_DAILY_LIMIT` | `20` | 每位玩家每天最多 AI 評分幾局（控制 API 費用） |
+| `AGENT_DAILY_LIMIT` | `60` | 每位玩家每天最多和 AI 保險業務員對話幾則 |
 
 ---
 
@@ -86,6 +87,7 @@ vercel env add FIREBASE_SERVICE_ACCOUNT
 | POST | `/api/games` | `{jobId, playerId}` → `{gameId}`，開始新的一局 |
 | POST | `/api/games/:id/draw` | `{kind: "chance"\|"fate", stage}` → `{card}`；該階段抽完回傳 404 `exhausted` |
 | POST | `/api/games/:id/draws/:cardId` | `{accepted}`，記錄機會牌的選擇 |
+| POST | `/api/agent` | `{gameId, playerId, context, messages}` → `{reply, recommendations}`，AI 保險業務員對話 |
 | POST | `/api/evaluate` | `{gameId, playerId, record}` → `{evaluation, rank}`，Claude 評分並寫入排行榜 |
 | GET | `/api/leaderboard?playerId=` | `{top, me}`：全服前 20 名（不含玩家 id，只標示自己）與自己的名次 |
 
@@ -132,7 +134,7 @@ vercel env add FIREBASE_SERVICE_ACCOUNT
 | 起點 | 1 | 無 |
 | 機會 | 20 | 抽機會牌，可接受或放棄 |
 | 命運 | 17 | 抽命運牌，抽到即發生 |
-| 保險業務員 | 5 | 業務員隨機介紹 3 種符合年齡與健康條件的險種 |
+| 保險業務員 | 5 | 和 AI 業務員對話（可提問、推薦險種並直接投保）；連不上伺服器時改為隨機介紹 3 種險種 |
 | 住院 | 2 | 擲骰決定住院天數（點數 × 2 天），醫療費每天 1,000，醫療險可理賠；下回合暫停移動 |
 | 特殊格 | 7 | 保單健檢、理財講座、觀念挑戰、貴人相助、保險優惠、保單整理日、錯過優惠各 1 格（`js/data.js` 的 `specialTiles`） |
 | 休息（含 3 個角落） | 8 | 什麼事都沒發生 |
@@ -143,7 +145,7 @@ vercel env add FIREBASE_SERVICE_ACCOUNT
 
 ### 保險
 
-九種險種的數值都在 `js/data.js` 的 `insurance`，邏輯在 `js/insurance.js`。金額以「每月」、時間以「月」設定，遊戲再依每格月數換算。
+十一種可投保險種與 5 種初始舊保單的數值都在 `js/data.js` 的 `insurance`，邏輯在 `js/insurance.js`。金額以「每月」、時間以「月」設定，遊戲再依每格月數換算。
 
 | 險種 | 25 歲月繳 | 費率 | 繳費 / 保障 | 理賠 |
 | --- | --- | --- | --- | --- |
@@ -155,7 +157,13 @@ vercel env add FIREBASE_SERVICE_ACCOUNT
 | 癌症險 | 400 | 平準 | 20 年 / 終身 | 確診 50 萬，之後每月 1 萬共 12 個月 |
 | 長照險 | 900 | 平準 | 20 年 / 終身 | 進入長照 3 個月後給付 30 萬，之後每月 3 萬 |
 | 投資型保險 | 自選 3,000／5,000／10,000 | 彈性 | 可停繳 / 85 歲 | 帳戶跟著台灣50 ETF；身故 100 萬與帳戶價值取高 |
+| 住院日額險 | 350 | 自然（每圈依年齡調整） | 每圈續約 / 85 歲 | 住院每天 2,000，每次最多 30 天（沒有天數的事件依醫藥費估算） |
+| 終身壽險（分紅） | 980 | 平準 | 20 年 / 終身 | 身故 100 萬與解約金取高；解約金依累計保費 × 年度倍數（參考真實建議書） |
 | 年金險 | 自選 3,000／5,000／10,000 | 2% 累積 | 繳到 65 歲 / 終身 | 65 歲起每月領年金，保證 20 年 |
+
+- **初始保單**：開局依機率抽保單類型（無 25%、基礎 35%／1 張、一般 30%／2 張、進階 10%／3 張），從舊保單池（小額終身壽險、舊型住院日額、學生團保延續意外險、舊型防癌險、手術險）抽不重複的已繳清保單；「保單整理日」特殊格再抽 1 張。
+- **保險頁**：右上角「保險」隨時可閱讀全部險種條款、看目前報價並自己投保，也可隨時解約。每個險種有「📄 建議書」（`proposal.html`），列出逐年保費、身故給付與解約金，可列印或另存 PDF。
+- **AI 業務員**：踩到保險業務員格時開啟對話（`/api/agent`，Claude 依玩家年齡、職業、健康、病史、現有保單與報價回答），推薦以按鈕呈現，玩家按下才會投保；每次來訪最多問 6 題。
 
 - **投保**：其他年齡的保費線性內插；健康低於門檻拒保，低於 70 加費 30%（壽險 30–49 加費 60%）；有相關病史的險種拒保。
 - **扣款**：保費每月與生活費一起扣；現金不足有 1 個月寬限期，之後停效（投資型改停繳、年金險改為不再繳費）。保費超過月薪 10% 時提醒（雙十原則）。
@@ -175,6 +183,8 @@ api/                    Vercel Serverless Functions
   games/index.js        建立遊戲
   games/[id]/draw.js    抽牌（交易保證不重複）
   games/[id]/draws/[cardId].js  記錄機會牌選擇
+  agent.js              AI 保險業務員對話（推薦以 tool use 回傳）
+  _lib/catalog.js       讓伺服器讀取 js/data.js 的險種資料
   evaluate.js           Claude 評分 + 排行榜
 scripts/import-cards.mjs  事件牌匯入 Firestore
 docs/event-cards.md     事件牌清單原稿

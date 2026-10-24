@@ -126,9 +126,9 @@
   }
 
   // 命運事件：依疾病標籤理賠，再套用影響
-  async function resolveFate(card, ctx, { title, tag, reason = `命運：${card.text}` }) {
+  async function resolveFate(card, ctx, { title, tag, days, reason = `命運：${card.text}` }) {
     const cost = card.cash < 0 ? -card.cash : 0;
-    const result = ctx.insurance.claim({ tag, cost });
+    const result = ctx.insurance.claim({ tag, cost, days });
     const extra = [];
     if (tag) extra.push(`🏷️ ${Insurance.TAG_NAME[tag]}`);
     if (card.stopMonths && ctx.stageId() !== 'elder') extra.push(`⏸️ 停薪 ${card.stopMonths} 個月`);
@@ -189,8 +189,169 @@
     return v === 'cancel' ? null : Number(v);
   }
 
-  // 保險格：業務員隨機介紹 3 種符合年齡與健康條件的險種，可以買其中幾種
+  // 保險格：連得上伺服器時和 AI 業務員對話，否則改用「隨機介紹 3 種險種」
   async function insurance(tile, ctx) {
+    if (ctx.gameId()) {
+      const ok = await agentChat(ctx);
+      if (ok) return;
+    }
+    await offerList(ctx);
+  }
+
+  // 給 AI 業務員的玩家狀況與目前報價
+  function agentContext(ctx) {
+    const ins = ctx.insurance;
+    return {
+      jobName: ctx.job.name,
+      salary: ctx.job.salary,
+      expense: ctx.job.expense,
+      age: ctx.age(),
+      health: ctx.state.health,
+      cash: Math.round(ctx.state.cash),
+      medicalHistory: ctx.state.medicalHistory,
+      monthlyPremium: ins.monthlyPremium(),
+      policies: ins.summary().filter((p) => !['已解約', '停效', '已到期', '已理賠結束'].includes(p.status)).map((p) => ({ name: p.name, status: p.status })),
+      quotes: GameData.insurance.products.map((p) => {
+        const q = ins.quote(p);
+        return { id: p.id, name: p.name, ok: q.ok, premium: q.premium || 0, reason: q.reason || '' };
+      }),
+    };
+  }
+
+  const AGENT_MAX_QUESTIONS = 6;
+  const AGENT_SUGGESTIONS = ['我現在最需要什麼保險？', '醫療險和住院日額險差在哪？', '我的保費會不會太高？'];
+
+  // AI 業務員對話視窗；玩家選擇「看險種清單」時回傳 false
+  function agentChat(ctx) {
+    return new Promise((resolve) => {
+      const history = [];
+      let asked = 0;
+      let bought = 0;
+      let busy = false;
+      const dlg = document.createElement('dialog');
+      dlg.className = 'modal modal-wide agent-chat';
+      dlg.setAttribute('aria-labelledby', 'agent-title');
+      dlg.dataset.dismissible = 'false';
+      dlg.innerHTML = `
+        <div class="modal-head">
+          <h2 id="agent-title">🛡️ 保險業務員來訪</h2>
+        </div>
+        <div class="modal-body">
+          <ol class="chat-log" aria-live="polite"></ol>
+          <div class="chat-suggest">${AGENT_SUGGESTIONS.map((t) => `<button class="btn btn-sm btn-ghost" type="button" data-suggest>${UI.escape(t)}</button>`).join('')}</div>
+          <form class="chat-form">
+            <label class="sr-only" for="agent-input">問業務員</label>
+            <input id="agent-input" type="text" maxlength="200" autocomplete="off" placeholder="問問業務員，例如：我該買哪種保險？">
+            <button class="btn btn-primary" type="submit">送出</button>
+          </form>
+          <p class="chat-meta"></p>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" type="button" data-list>看業務員帶來的險種清單</button>
+          <button class="btn btn-primary" type="button" data-done>結束對話</button>
+        </div>`;
+      const log = dlg.querySelector('.chat-log');
+      const input = dlg.querySelector('#agent-input');
+      const meta = dlg.querySelector('.chat-meta');
+      const sendBtn = dlg.querySelector('.chat-form button');
+
+      const updateMeta = () => {
+        const left = AGENT_MAX_QUESTIONS - asked;
+        meta.textContent = left > 0 ? `這次還可以問 ${left} 個問題` : '業務員還有其他客戶，這次就聊到這裡。';
+        input.disabled = sendBtn.disabled = busy || left <= 0;
+        dlg.querySelectorAll('[data-suggest]').forEach((b) => { b.disabled = busy || left <= 0; });
+      };
+
+      function addLine(role, html) {
+        const li = document.createElement('li');
+        li.className = `chat-msg ${role}`;
+        li.innerHTML = html;
+        log.append(li);
+        li.scrollIntoView({ block: 'nearest' });
+        return li;
+      }
+
+      function recHtml(r) {
+        const prod = Insurance.PRODUCTS[r.productId];
+        const q = ctx.insurance.quote(prod);
+        const price = !q.ok ? `無法投保：${q.reason}` : prod.amounts ? '月繳金額自選' : `月繳 ${UI.fmtMoney(q.premium)}`;
+        return `
+          <div class="chat-rec">
+            <div><strong>${prod.icon} ${UI.escape(prod.name)}</strong><span class="chat-rec-price">${UI.escape(price)}</span></div>
+            <p>${UI.escape(r.reason)}</p>
+            <button class="btn btn-sm btn-primary" type="button" data-rec="${prod.id}" ${q.ok ? '' : 'disabled'}>投保</button>
+          </div>`;
+      }
+
+      async function ask(text) {
+        if (busy || asked >= AGENT_MAX_QUESTIONS) return;
+        busy = true;
+        asked++;
+        history.push({ role: 'user', content: text });
+        addLine('user', UI.escape(text));
+        const typing = addLine('agent typing', '<span class="dots" aria-label="業務員輸入中">…</span>');
+        updateMeta();
+        try {
+          const res = await API.agent(ctx.gameId(), agentContext(ctx), history);
+          typing.remove();
+          history.push({ role: 'assistant', content: res.reply });
+          addLine('agent', UI.escape(res.reply).replace(/\n/g, '<br>') + (res.recommendations || []).map(recHtml).join(''));
+          ctx.logDecision(`詢問保險業務員：「${text}」`, 'insurance-ask');
+        } catch (e) {
+          typing.remove();
+          history.pop();
+          asked--;
+          addLine('agent error', e.code === 'daily_limit'
+            ? '今天和業務員聊太多次了，可以改看險種清單，或在右上角「保險」自己投保。'
+            : '業務員暫時無法回覆，可以改看險種清單。');
+        }
+        busy = false;
+        updateMeta();
+        input.focus();
+      }
+
+      // showList：改用險種清單畫面（回傳 false 交給 offerList）
+      function finish(showList) {
+        dlg.close();
+        dlg.remove();
+        if (!bought && !showList) ctx.logDecision(`${ctx.age()} 歲和保險業務員聊過，暫不投保`, 'insurance-decline');
+        resolve(!showList);
+      }
+
+      dlg.querySelector('.chat-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const text = input.value.trim();
+        if (!text) return;
+        input.value = '';
+        ask(text);
+      });
+      dlg.addEventListener('click', async (e) => {
+        const btn = e.target.closest('button');
+        if (!btn) return;
+        if (btn.matches('[data-suggest]')) ask(btn.textContent);
+        else if (btn.matches('[data-done]')) finish(false);
+        else if (btn.matches('[data-list]')) finish(true);
+        else if (btn.dataset.rec) {
+          const res = await purchase(Insurance.PRODUCTS[btn.dataset.rec], ctx);
+          if (res) {
+            bought++;
+            btn.disabled = true;
+            btn.textContent = '已投保';
+          }
+        }
+      });
+      dlg.addEventListener('cancel', (e) => e.preventDefault());
+
+      document.body.append(dlg);
+      addLine('agent', `你好！我是保險業務員。你今年 ${ctx.age()} 歲，目前每月保費 ${UI.escape(UI.fmtMoney(ctx.insurance.monthlyPremium()))}。想了解哪方面的保障？有任何保險問題都可以問我。`);
+      updateMeta();
+      dlg.showModal();
+      input.focus();
+    });
+  }
+
+  // 業務員隨機介紹 3 種符合年齡與健康條件的險種，可以買其中幾種
+  async function offerList(ctx) {
     const ins = ctx.insurance;
     let offers = ins.offers();
     if (!offers.length) {
@@ -214,29 +375,35 @@
       });
       if (!choice.startsWith('buy:')) break;
       const prod = offers.find((p) => p.id === choice.slice(4));
-      let amount;
-      if (prod.amounts) {
-        amount = await chooseAmount(prod);
-        if (!amount) continue;
-      }
-      if (prod.id === 'invest' && ctx.stats.trades === 0) {
-        const ok = await UI.confirm({
-          title: '風險屬性評估',
-          message: '投資型保險的帳戶價值會跟著台灣50 ETF 漲跌，可能虧損本金，而且前 5 年要扣 25% 費用。你還沒有任何投資經驗，確定了解風險嗎？',
-          okText: '我了解，投保',
-          cancelText: '再想想',
-        });
-        if (!ok) continue;
-      }
-      const res = ins.buy(prod.id, amount);
-      if (!res) continue;
+      if (!(await purchase(prod, ctx))) continue;
       bought++;
-      ctx.renderStatus();
-      UI.toast(`🛡️ 已投保${prod.name}`);
-      if (res.overBudget) UI.toast(`⚠️ 保費總額 ${UI.fmtMoney(res.total)}，已超過月薪的 ${Math.round(GameData.insurance.budgetRate * 100)}%`);
       offers = offers.filter((p) => p.id !== prod.id);
     }
     if (!bought) ctx.logDecision(`${ctx.age()} 歲婉拒投保（${shown.join('、')}）`, 'insurance-decline');
+  }
+
+  // 投保流程（保險格與保險頁共用）：選金額、風險確認、投保；成功回傳 buy() 的結果，取消回傳 null
+  async function purchase(prod, ctx) {
+    let amount;
+    if (prod.amounts) {
+      amount = await chooseAmount(prod);
+      if (!amount) return null;
+    }
+    if (prod.id === 'invest' && ctx.stats.trades === 0) {
+      const ok = await UI.confirm({
+        title: '風險屬性評估',
+        message: '投資型保險的帳戶價值會跟著台灣50 ETF 漲跌，可能虧損本金，而且前 5 年要扣 25% 費用。你還沒有任何投資經驗，確定了解風險嗎？',
+        okText: '我了解，投保',
+        cancelText: '再想想',
+      });
+      if (!ok) return null;
+    }
+    const res = ctx.insurance.buy(prod.id, amount);
+    if (!res) return null;
+    ctx.renderStatus();
+    UI.toast(`🛡️ 已投保${prod.name}`);
+    if (res.overBudget) UI.toast(`⚠️ 保費總額 ${UI.fmtMoney(res.total)}，已超過月薪的 ${Math.round(GameData.insurance.budgetRate * 100)}%`);
+    return res;
   }
 
   async function rest() {
@@ -260,7 +427,7 @@
       kind: 'hospital', id: '住院', cash: -cost, netIncome: 0, health: 0,
       text: `擲出 ${pip} 點，住院 ${days} 天，醫療費 ${UI.fmtMoney(cost)}。出院後要休養，下回合暫停移動。`,
     };
-    await resolveFate(card, ctx, { title: '🏥 住院', tag: 'hospital', reason: `住院 ${days} 天` });
+    await resolveFate(card, ctx, { title: '🏥 住院', tag: 'hospital', days, reason: `住院 ${days} 天` });
     ctx.state.skipTurns = cfg.skipTurns;
   }
 
@@ -418,8 +585,21 @@
     grantDiscount(ctx, cfg, '保險優惠活動');
   }
 
-  // 6. 保單整理日：從初始保單池抽 1 張（初始保單池在改版計畫 P2 完成，目前先給現金）
+  // 6. 保單整理日：從初始保單池抽 1 張；舊保單都有了就改給現金
   async function attic(tile, ctx) {
+    const p = ctx.insurance.drawLegacy('保單整理日');
+    if (p) {
+      const prod = Insurance.PRODUCTS[p.id];
+      await UI.alert({
+        title: '🗂️ 保單整理日',
+        html: specialHtml('你整理舊文件時，發現一張父母過去替你購買、但你一直不知道的保單。',
+          [`${prod.icon} ${prod.name}`, prod.summary], prod.note),
+        dismissible: false,
+      });
+      ctx.logDecision(`保單整理日發現舊保單：${prod.name}`, 'special');
+      ctx.renderStatus();
+      return;
+    }
     const cfg = SP().attic;
     await UI.alert({
       title: '🗂️ 保單整理日',
@@ -458,5 +638,6 @@
     rest,
     default: rest,
     illness, // 不是格子，由 js/game.js 依機率觸發
+    purchase, // 不是格子，保險頁投保也用這個流程
   };
 })();
