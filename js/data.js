@@ -41,6 +41,11 @@
     incomeRate: { youth: 1, middle: 1.3, elder: 0.4 },
     // 每過一圈健康自然下降
     healthDecayPerLap: { youth: 0, middle: 4, elder: 10 },
+    // 通膨：物價指數每年上漲 inflation，生活費與事件牌金額跟著物價調整；薪資（含退休金）每圈調升 salaryGrowthPerLap
+    inflation: 0.02,
+    salaryGrowthPerLap: 0.01,
+    // 現金放銀行的年利率，每月計息（只算正的現金）
+    bankRate: 0.015,
   };
 
   // laps：此階段持續幾圈（老年無上限）
@@ -309,6 +314,97 @@
     { text: '出口數據亮眼，經濟成長優於預期', effect: 0.04 },
   ];
 
+  // 經濟劇本：取材自真實歷史事件，讓股市有故事。遊戲開始時排好時間表（js/game.js）
+  //   history 依序出現（每一格有 randomRate 機率改抽 future 的情境），之後輪流使用 future
+  //   shock：事件當下各股票的漲跌；recovery：之後 months 個月內逐步回升的總幅度
+  //   life：對玩家的影響（cash 會依物價調整）；illness：重大疾病與住院發生率倍率；price：物價一次跳升
+  const marketStory = {
+    firstMonth: [12, 36], // 第一個事件在開局後第幾個月之間
+    gapMonths: [48, 84], // 之後每隔幾個月一個事件
+    randomRate: 0.3,
+    history: [
+      {
+        id: 'dotcom', icon: '💥', title: '網路泡沫破裂', source: '取材自 2000 年',
+        text: '網路公司股價飆漲多年後泡沫破裂，許多沒有獲利的科技公司倒閉，科技股一年內腰斬。',
+        shock: { ETF50: -0.25, BANK: -0.1, TECH: -0.45, BIO: -0.2 }, recovery: { months: 36, ETF50: 0.2, TECH: 0.3, BIO: 0.1 },
+        life: { happiness: -2, text: '身邊有朋友在科技業被裁員，大家都很焦慮。' },
+      },
+      {
+        id: 'sars', icon: '😷', title: 'SARS 疫情', source: '取材自 2003 年',
+        text: 'SARS 疫情爆發，醫院封院、街上人人戴口罩，觀光與消費急凍，防疫概念股逆勢上漲。',
+        shock: { ETF50: -0.12, BANK: -0.08, TECH: -0.1, BIO: 0.2 }, recovery: { months: 12, ETF50: 0.15, BANK: 0.08, TECH: 0.12 },
+        life: { health: -2, happiness: -2, text: '疫情期間生活受限，健康與心情都受到影響。' }, illness: { rate: 1.5, months: 6 },
+      },
+      {
+        id: 'gfc', icon: '🏦', title: '全球金融海嘯', source: '取材自 2008 年',
+        text: '美國次級房貸風暴引爆全球金融危機，大型投資銀行倒閉，股市重挫，金融股跌最深。',
+        shock: { ETF50: -0.4, BANK: -0.5, TECH: -0.45, BIO: -0.3 }, recovery: { months: 48, ETF50: 0.45, BANK: 0.4, TECH: 0.5, BIO: 0.25 },
+        life: { cash: -30000, happiness: -4, text: '公司實施無薪假、年終獎金泡湯，家裡氣氛很低迷。', workOnly: true },
+      },
+      {
+        id: 'euro', icon: '🇪🇺', title: '歐債危機', source: '取材自 2011 年',
+        text: '希臘等歐洲國家債務違約疑慮升高，全球資金恐慌撤出股市。',
+        shock: { ETF50: -0.2, BANK: -0.25, TECH: -0.2, BIO: -0.1 }, recovery: { months: 24, ETF50: 0.15, BANK: 0.15, TECH: 0.18 },
+      },
+      {
+        id: 'china2015', icon: '📉', title: '中國股災', source: '取材自 2015 年',
+        text: '中國股市暴漲後急跌，連帶拖累亞洲股市，市場人心惶惶。',
+        shock: { ETF50: -0.15, BANK: -0.1, TECH: -0.2, BIO: -0.25 }, recovery: { months: 18, ETF50: 0.12, TECH: 0.15, BIO: 0.15 },
+      },
+      {
+        id: 'covid', icon: '🦠', title: '新冠疫情', source: '取材自 2020 年',
+        text: '新冠肺炎疫情席捲全球，股市一個月內崩跌，隨後各國大量印鈔救市，股價又快速反彈。',
+        shock: { ETF50: -0.3, BANK: -0.25, TECH: -0.25, BIO: 0.35 }, recovery: { months: 18, ETF50: 0.5, BANK: 0.25, TECH: 0.6 },
+        life: { health: -3, happiness: -4, text: '疫情讓人不敢出門，和親友的相聚少了很多。' }, illness: { rate: 1.5, months: 12 },
+      },
+      {
+        id: 'ratehike', icon: '📈', title: '全球升息循環', source: '取材自 2022 年',
+        text: '通膨升溫，各國央行快速升息，高估值的科技股大幅修正，銀行股反而受惠。',
+        shock: { ETF50: -0.22, BANK: 0.1, TECH: -0.3, BIO: -0.2 }, recovery: { months: 24, ETF50: 0.2, TECH: 0.3 },
+        price: 0.03,
+      },
+      {
+        id: 'ai', icon: '🤖', title: 'AI 熱潮', source: '取材自 2023 年',
+        text: '生成式 AI 爆紅，半導體與科技股一路大漲，台股創下歷史新高。',
+        shock: { ETF50: 0.25, BANK: 0.05, TECH: 0.6, BIO: 0.05 },
+      },
+    ],
+    future: [
+      {
+        id: 'green', icon: '🌱', title: '綠能革命', source: '未來情境',
+        text: '各國加速淘汰化石燃料，綠能與電網建設帶動新一波投資熱潮。',
+        shock: { ETF50: 0.15, BANK: 0.05, TECH: 0.2 },
+      },
+      {
+        id: 'aging', icon: '🧓', title: '高齡化醫療需求爆發', source: '未來情境',
+        text: '人口快速老化，長照與醫療需求大增，生技醫療股受到追捧。',
+        shock: { ETF50: 0.05, BIO: 0.4 },
+      },
+      {
+        id: 'inflation', icon: '🔥', title: '全球通膨失控', source: '未來情境',
+        text: '能源與糧食價格飆漲，物價一口氣跳升，股市震盪下跌。',
+        shock: { ETF50: -0.15, BANK: 0.05, TECH: -0.15, BIO: -0.1 }, recovery: { months: 24, ETF50: 0.12, TECH: 0.12 },
+        price: 0.05, life: { happiness: -2, text: '菜價、油價、房租都在漲，荷包越來越緊。' },
+      },
+      {
+        id: 'conflict', icon: '⚠️', title: '地緣政治衝突', source: '未來情境',
+        text: '區域衝突升溫，供應鏈中斷，市場避險情緒濃厚。',
+        shock: { ETF50: -0.2, BANK: -0.1, TECH: -0.25, BIO: -0.05 }, recovery: { months: 24, ETF50: 0.18, TECH: 0.22 },
+        life: { happiness: -3, text: '新聞每天都是衝突消息，讓人感到不安。' },
+      },
+      {
+        id: 'biofail', icon: '💊', title: '新藥試驗失敗潮', source: '未來情境',
+        text: '多款明星新藥在臨床試驗失敗，生技股集體重挫。',
+        shock: { BIO: -0.4 }, recovery: { months: 36, BIO: 0.2 },
+      },
+      {
+        id: 'antitrust', icon: '⚖️', title: '大型科技反壟斷', source: '未來情境',
+        text: '各國對大型科技公司祭出反壟斷調查與罰款，科技股承壓。',
+        shock: { ETF50: -0.08, TECH: -0.2 }, recovery: { months: 24, TECH: 0.15 },
+      },
+    ],
+  };
+
   const tips = [
     { id: 'emergency', title: '緊急預備金', text: '至少存下 3～6 個月的生活費，遇到失業或意外時才不會被迫借錢。' },
     { id: 'rule72', title: '72 法則', text: '用 72 除以年報酬率，就能估算資產翻倍所需年數。例如年報酬 6%，約 12 年翻倍。' },
@@ -322,5 +418,5 @@
     { id: 'panic', title: '別在恐慌時賣出', text: '市場大跌時恐慌賣出，往往把帳面虧損變成真正的虧損。' },
   ];
 
-  window.GameData = { jobs, fateWeight, economy, stages, tileTypes, boardCounts, board, hospital, specialTiles, insurance, cardTagOf, majorIllness, stocks, marketNews, tips };
+  window.GameData = { jobs, fateWeight, economy, stages, tileTypes, boardCounts, board, hospital, specialTiles, insurance, cardTagOf, majorIllness, stocks, marketNews, marketStory, tips };
 })();

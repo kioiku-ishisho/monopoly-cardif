@@ -342,6 +342,7 @@ dialog.modal::backdrop { background: rgba(0, 20, 10, 0.55); backdrop-filter: blu
   background: var(--surface);
 }
 fieldset.field { border: 0; padding: 0; margin: 0 0 18px; }
+.divider { border: 0; border-top: 1px solid var(--border); margin: 8px 0 16px; }
 .radio-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .radio-row label {
   display: inline-flex;

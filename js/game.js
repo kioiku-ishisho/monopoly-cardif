@@ -31,6 +31,9 @@
     skipTurns: 0, // 住院：剩下幾回合暫停移動
     policyPerks: { discount: null, surcharge: 0 }, // 特殊格給的下次投保優惠 { rate, cap } 與加價
     quizUsed: [], // 本局答過的題目 id
+    salaryIndex: 1, // 薪資指數：每圈調升 economy.salaryGrowthPerLap
+    priceShock: 1, // 經濟事件造成的物價一次跳升（乘在通膨指數上）
+    story: { schedule: [], pending: [], illness: null, seen: [] }, // 經濟劇本（js/data.js 的 marketStory）
     gameId: null, // 伺服器端的遊戲 id，用來抽牌
     holdings: {}, // { 股票id: { shares, cost } }
     market: D.stocks.map((s) => ({ ...s, prev: s.price, history: [s.price] })),
@@ -60,6 +63,7 @@
     firstInsuredAge: null,
     maxPremiumRatio: 0,
     majorIllness: 0,
+    interestTotal: 0,
     quizAsked: 0,
     quizCorrect: 0,
     hospitalDays: 0,
@@ -70,9 +74,15 @@
   const age = () => E.startAge + (state.steps * E.monthsPerStep) / 12;
   const ageInt = () => Math.floor(age());
   const incomeStopped = () => stage().id !== 'elder' && state.steps < state.incomeStopUntil;
-  const monthlyIncome = () => (incomeStopped() ? 0 : Math.round(job.salary * E.incomeRate[stage().id]));
+  const monthsPassed = () => state.steps * E.monthsPerStep;
+  // 物價指數：每年通膨 economy.inflation，再乘上經濟事件造成的跳升
+  const priceIndex = () => Math.pow(1 + E.inflation, monthsPassed() / 12) * state.priceShock;
+  const salaryNow = () => Math.round(job.salary * state.salaryIndex);
+  const expenseNow = () => Math.round(job.expense * priceIndex());
+  const inflate = (n) => (n ? Math.round((n * priceIndex()) / 100) * 100 : 0);
+  const monthlyIncome = () => (incomeStopped() ? 0 : Math.round(salaryNow() * E.incomeRate[stage().id]));
   // 不含保險的每月收支；保費與保險給付由 Ins.monthly() 另外處理
-  const monthlyCashflow = () => monthlyIncome() - job.expense - Ins.careCost() + state.netIncomeAdj;
+  const monthlyCashflow = () => monthlyIncome() - expenseNow() - Ins.careCost() + state.netIncomeAdj;
   const monthlyNet = () => monthlyCashflow() - Ins.monthlyPremium() + Ins.monthlyBenefit();
   const stockValue = () => state.market.reduce((sum, s) => sum + (state.holdings[s.id]?.shares || 0) * s.price, 0);
   const netWorth = () => state.cash + stockValue() + Ins.value();
@@ -400,14 +410,17 @@
         <div><dt>年齡</dt><dd>${ageInt()} 歲</dd></div>
         <div><dt>人生階段</dt><dd>${stage().name}</dd></div>
         <div><dt>${stage().id === 'elder' ? '每月退休金' : '每月收入'}</dt><dd>${UI.fmtMoney(income)}</dd></div>
-        <div><dt>每月生活費</dt><dd>${UI.fmtMoney(job.expense)}</dd>
+        <div><dt>物價指數</dt><dd>${priceIndex().toFixed(2)}</dd>
+          <dd class="info-sub">每年通膨 ${Math.round(E.inflation * 100)}%；薪資每圈調升 ${Math.round(E.salaryGrowthPerLap * 100)}%（目前月薪 ${UI.fmtMoney(salaryNow())}）</dd></div>
+        <div><dt>每月生活費</dt><dd>${UI.fmtMoney(expenseNow())}</dd>
           ${state.ltc ? `<dd class="info-sub">另加長照照護費 ${UI.fmtMoney(Ins.careCost())}</dd>` : ''}</div>
         <div><dt>事件造成的淨收入變化</dt><dd class="${state.netIncomeAdj >= 0 ? 'pos' : 'neg'}">${UI.fmtSigned(state.netIncomeAdj)}/月</dd></div>
         <div><dt>每月保費</dt><dd>${UI.fmtMoney(premium)}</dd>
           <dd class="info-sub${premium > job.salary * D.insurance.budgetRate ? ' neg' : ''}">月薪的 ${Math.round((premium / job.salary) * 100)}%（建議約 ${Math.round(D.insurance.budgetRate * 100)}%）</dd></div>
         ${benefit ? `<div><dt>每月保險給付</dt><dd class="pos">${UI.fmtSigned(benefit)}</dd></div>` : ''}
         <div><dt>每月結餘</dt><dd class="${net >= 0 ? 'pos' : 'neg'}">${UI.fmtSigned(net)}</dd></div>
-        <div><dt>現金</dt><dd>${UI.fmtMoney(state.cash)}</dd></div>
+        <div><dt>現金</dt><dd>${UI.fmtMoney(state.cash)}</dd>
+          <dd class="info-sub">銀行年利率 ${(E.bankRate * 100).toFixed(1)}%，累計利息 ${UI.fmtMoney(stats.interestTotal)}</dd></div>
         <div><dt>股票市值</dt><dd>${UI.fmtMoney(stockValue())}</dd></div>
         <div><dt>保單價值</dt><dd>${UI.fmtMoney(Ins.value())}</dd>
           <dd class="info-sub">投資型保險與年金險帳戶</dd></div>
@@ -607,24 +620,118 @@
     return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
   }
 
-  // 股票參數以「一年」為單位，依本回合經過的月數換算
+  // ===== 經濟劇本：開局排好事件時間表 =====
+  const STORY = Object.fromEntries([...D.marketStory.history, ...D.marketStory.future].map((ep) => [ep.id, ep]));
+
+  function buildStory() {
+    const S = D.marketStory;
+    const between = ([a, b]) => a + Math.floor(Math.random() * (b - a + 1));
+    const shuffle = (arr) => arr.map((x) => [Math.random(), x]).sort((a, b) => a[0] - b[0]).map((x) => x[1]);
+    const history = [...S.history];
+    let future = shuffle([...S.future]);
+    const schedule = [];
+    for (let m = between(S.firstMonth); m < (E.maxAge - E.startAge) * 12; m += between(S.gapMonths)) {
+      let ep;
+      if (history.length && (Math.random() >= S.randomRate || !future.length)) ep = history.shift();
+      else {
+        if (!future.length) future = shuffle([...S.future]);
+        ep = future.shift();
+      }
+      schedule.push({ month: m, id: ep.id });
+    }
+    return schedule;
+  }
+
+  // 本回合到期的經濟事件：回傳事件清單與各股票的衝擊、回升幅度
+  function storyMoves(months) {
+    const now = monthsPassed();
+    const due = state.story.schedule.filter((e) => e.month <= now).map((e) => STORY[e.id]);
+    state.story.schedule = state.story.schedule.filter((e) => e.month > now);
+    const move = {};
+    const add = (id, v) => { move[id] = (move[id] || 0) + v; };
+    for (const p of state.story.pending) {
+      const n = Math.min(p.left, months);
+      Object.entries(p.per).forEach(([id, v]) => add(id, v * n));
+      p.left -= n;
+    }
+    state.story.pending = state.story.pending.filter((p) => p.left > 0);
+    for (const ep of due) {
+      Object.entries(ep.shock).forEach(([id, v]) => add(id, v));
+      if (ep.recovery) {
+        const { months: m, ...total } = ep.recovery;
+        state.story.pending.push({ left: m, per: Object.fromEntries(Object.entries(total).map(([id, v]) => [id, v / m])) });
+      }
+      if (ep.price) state.priceShock *= 1 + ep.price;
+      if (ep.illness) state.story.illness = { rate: ep.illness.rate, until: now + ep.illness.months };
+      state.story.seen.push(ep.id);
+    }
+    return { due, move };
+  }
+
+  // 疫情等事件期間，重大疾病發生率提高
+  const illnessRate = () => (state.story.illness && monthsPassed() < state.story.illness.until ? state.story.illness.rate : 1);
+
+  // 股票參數以「一年」為單位，依本回合經過的月數換算；回傳本回合發生的經濟事件
   function marketTick(months) {
     const dt = months / 12;
-    const news = Math.random() < 0.18 * dt ? D.marketNews[Math.floor(Math.random() * D.marketNews.length)] : null;
+    const { due, move } = storyMoves(months);
+    const news = !due.length && Math.random() < 0.18 * dt ? D.marketNews[Math.floor(Math.random() * D.marketNews.length)] : null;
     let total = 0;
     state.market.forEach((s) => {
       s.prev = s.price;
-      const r = s.drift * dt + gaussian() * s.vol * Math.sqrt(dt) + (news ? news.effect * s.beta : 0);
+      const r = s.drift * dt + gaussian() * s.vol * Math.sqrt(dt) + (news ? news.effect * s.beta : 0) + (move[s.id] || 0);
       s.price = Math.max(1, Math.round(s.price * (1 + r) * 100) / 100);
       s.history.push(s.price);
       if (s.history.length > 40) s.history.shift();
       total += s.price / s.prev - 1;
     });
     const avg = total / state.market.length;
-    const text = news ? `${news.text}，市場平均 ${UI.fmtPct(avg)}` : `市場平均${avg >= 0 ? '上漲' : '下跌'} ${UI.fmtPct(avg)}`;
-    addHistory('market', avg >= 0 ? '📈' : '📉', text);
-    showTicker(news ? '📰' : avg >= 0 ? '📈' : '📉', text, !!news, avg);
+    const headline = due.length ? due.map((ep) => `${ep.title}（${ep.source}）`).join('、') : news && news.text;
+    const text = headline ? `${headline}，市場平均 ${UI.fmtPct(avg)}` : `市場平均${avg >= 0 ? '上漲' : '下跌'} ${UI.fmtPct(avg)}`;
+    addHistory('market', due.length ? due[0].icon : avg >= 0 ? '📈' : '📉', text);
+    showTicker(due.length ? due[0].icon : news ? '📰' : avg >= 0 ? '📈' : '📉', text, !!headline, avg);
     if ($('#dlg-stock').open) renderStocks();
+    return due;
+  }
+
+  // 經濟事件的故事畫面與對玩家的影響
+  async function showStory(due) {
+    for (const ep of due) {
+      const stocks = Object.entries(ep.shock).map(([id, v]) => {
+        const s = state.market.find((m) => m.id === id);
+        return `<li class="${v >= 0 ? 'up' : 'down'}">${UI.escape(s.name)} ${UI.fmtPct(v)}</li>`;
+      }).join('');
+      const life = ep.life ? { ...ep.life } : null;
+      if (life && life.workOnly && stage().id === 'elder') delete life.cash;
+      const effects = life ? { cash: inflate(life.cash || 0), health: life.health || 0, happiness: life.happiness || 0 } : null;
+      const lifeItems = effects ? [
+        effects.cash && `💰 現金 ${UI.fmtSigned(effects.cash)}`,
+        effects.health && `❤️ 健康 ${effects.health > 0 ? '+' : ''}${effects.health}`,
+        effects.happiness && `😊 幸福 ${effects.happiness > 0 ? '+' : ''}${effects.happiness}`,
+      ].filter(Boolean) : [];
+      const extra = [
+        ep.price && `🛒 物價一次上漲 ${Math.round(ep.price * 100)}%`,
+        ep.illness && `🦠 接下來 ${ep.illness.months} 個月生病的機率提高`,
+        ep.recovery && `📈 接下來約 ${Math.round(ep.recovery.months / 12)} 年股價會逐步回升`,
+      ].filter(Boolean);
+      const held = stockValue();
+      await UI.modal({
+        title: `${ep.icon} ${ep.title}`,
+        body: `
+          <div class="event-card" data-kind="market">
+            <p class="story-source">📰 ${UI.escape(ep.source)}</p>
+            <p class="card-text">${UI.escape(ep.text)}</p>
+            <ul class="effect-list story-stocks" aria-label="股市影響">${stocks}</ul>
+            ${life ? `<p>${UI.escape(life.text)}</p>` : ''}
+            ${lifeItems.length || extra.length ? `<ul class="effect-list" aria-label="對你的影響">${[...lifeItems, ...extra].map((t) => `<li>${UI.escape(t)}</li>`).join('')}</ul>` : ''}
+            ${held ? `<p class="card-note">你目前持股市值 ${UI.fmtMoney(held)}。市場大跌時恐慌賣出，常常會把帳面虧損變成真的虧損。</p>` : ''}
+          </div>`,
+        actions: [{ label: '繼續', value: 'ok', variant: 'primary' }],
+        dismissible: false,
+      });
+      if (effects && (effects.cash || effects.health || effects.happiness)) ctx.applyEffects(effects, `${ep.title}：${life.text}`, ep.icon);
+      logDecision(`${ageInt()} 歲經歷「${ep.title}」（${ep.source}），當時持股市值 ${UI.fmtMoney(held)}`, 'market-event');
+    }
   }
 
   function showTicker(icon, text, isNews, avg) {
@@ -803,6 +910,7 @@
       renderStatus();
     },
     insurance: Ins,
+    openProposal,
     job,
     // 生病停薪；退休後不影響退休金
     stopIncome(months) {
@@ -817,6 +925,12 @@
     logDecision,
     renderStatus: () => renderStatus(),
     addHistory,
+    // 依目前物價調整事件牌的金額
+    inflate: (card) => ({ ...card, cash: inflate(card.cash), netIncome: inflate(card.netIncome) }),
+    inflateAmount: inflate,
+    priceIndex,
+    salaryNow,
+    expenseNow,
     // 擲一次骰子（住院天數等），回傳 1–6
     rollDice: () => rollDice(),
     // 貴人相助：往前走 n 格（照常過月份），再執行停留格的事件
@@ -856,6 +970,8 @@
   async function passStart() {
     state.lap++;
     Ins.onLap();
+    state.salaryIndex *= 1 + E.salaryGrowthPerLap;
+    addHistory('life', '🧾', `物價指數 ${priceIndex().toFixed(2)}，每月生活費調整為 ${UI.fmtMoney(expenseNow())}；薪資調升 ${Math.round(E.salaryGrowthPerLap * 100)}%，月薪 ${UI.fmtMoney(salaryNow())}`);
     const decay = E.healthDecayPerLap[stage().id];
     if (decay) {
       state.health = clamp(state.health - decay, 0, 100);
@@ -876,13 +992,23 @@
     }
   }
 
+  // 過一個月：銀行利息、薪水與生活費、保費；noSalary 為住院期間沒有薪水
+  function payMonth(noSalary = false) {
+    if (state.cash > 0) {
+      const interest = Math.round(state.cash * (E.bankRate / 12) * E.monthsPerStep);
+      state.cash += interest;
+      stats.interestTotal += interest;
+    }
+    state.cash += (monthlyCashflow() - (noSalary ? monthlyIncome() : 0)) * E.monthsPerStep;
+    Ins.monthly();
+  }
+
   // 前進一格 = 過一個月：領薪、扣生活費與保費，經過起點時換圈
   async function stepOnce(delay) {
     await waitIfPaused();
     state.position = (state.position + 1) % E.tilesPerLap;
     state.steps++;
-    state.cash += monthlyCashflow() * E.monthsPerStep;
-    Ins.monthly();
+    payMonth();
     if (state.position === 0) await passStart();
     placeToken(true);
     renderStatus();
@@ -902,13 +1028,13 @@
     const before = state.cash;
     state.steps++;
     const lost = stage().id === 'elder' ? 0 : monthlyIncome();
-    state.cash += (monthlyCashflow() - lost) * E.monthsPerStep;
-    Ins.monthly();
+    payMonth(lost > 0);
     addHistory('life', '🛏️', `住院休養，暫停移動 1 回合${lost ? `，少領 1 個月薪水（${UI.fmtMoney(lost)}）` : ''}`);
     renderStatus();
     announce(`住院休養中，暫停移動・1 個月收支 ${UI.fmtSigned(state.cash - before)}`);
-    marketTick(E.monthsPerStep);
+    const due = marketTick(E.monthsPerStep);
     await UI.alert({ title: '🛏️ 住院休養中', message: `這回合暫停移動。${lost ? '無法上班，這個月沒有薪水。' : '退休金照常入帳。'}`, okText: '繼續' });
+    await showStory(due);
     return E.monthsPerStep;
   }
 
@@ -920,7 +1046,7 @@
     ensureTokenVisible();
     const tile = currentTile();
     announce(`擲出 ${n} 點，來到「${tile.name}」・${n * E.monthsPerStep} 個月收支 ${UI.fmtSigned(state.cash - before)}`);
-    marketTick(n * E.monthsPerStep);
+    await showStory(marketTick(n * E.monthsPerStep));
     await runTile(tile);
     return n * E.monthsPerStep;
   }
@@ -956,7 +1082,7 @@
     const weightOf = (ev) => ev.weight * (['heart', 'stroke'].includes(ev.tag) ? job.risk.heart || 1 : 1);
     const baseWeight = cfg.events.reduce((s, ev) => s + ev.weight, 0);
     const totalWeight = cfg.events.reduce((s, ev) => s + weightOf(ev), 0);
-    let rate = Insurance.interp(cfg.annualRate, age()) * (totalWeight / baseWeight);
+    let rate = Insurance.interp(cfg.annualRate, age()) * (totalWeight / baseWeight) * illnessRate();
     if (state.health < 70) rate *= 1 + ((70 - state.health) / 10) * 0.2;
     if (Math.random() >= (rate * months) / 12) return;
     let r = Math.random() * totalWeight;
@@ -1038,6 +1164,10 @@
       peakNetWorth: Math.round(stats.peakNetWorth),
       minHealth: stats.minHealth,
       avgHealth: stats.healthSamples ? Math.round(stats.healthSum / stats.healthSamples) : state.health,
+      priceIndex: Math.round(priceIndex() * 100) / 100,
+      finalSalary: salaryNow(),
+      interestTotal: Math.round(stats.interestTotal),
+      marketEvents: state.story.seen.map((id) => STORY[id].title),
       finalHappiness: state.happiness,
       minHappiness: stats.minHappiness,
       avgHappiness: stats.healthSamples ? Math.round(stats.happinessSum / stats.healthSamples) : state.happiness,
@@ -1089,11 +1219,42 @@
     state.paused = true;
     await UI.modal({
       title: '遊戲暫停',
-      body: '<p class="pause-body" aria-hidden="true">⏸️</p><p style="text-align:center">休息一下，準備好再繼續。</p>',
+      body: pauseBody(),
       actions: [{ label: '繼續遊戲', value: 'ok', variant: 'primary' }],
     });
     state.paused = false;
   });
+
+  // 暫停視窗內可直接調整外觀主題與股票漲跌顏色，變更立即套用並存檔（與首頁設定共用）
+  function pauseBody() {
+    const s = Store.getSettings();
+    const radio = (name, value, label) =>
+      `<label><input type="radio" name="${name}" value="${value}" ${s[name] === value ? 'checked' : ''}> ${label}</label>`;
+    const el = document.createElement('div');
+    el.innerHTML = `
+      <p class="pause-body" aria-hidden="true">⏸️</p>
+      <p style="text-align:center">休息一下，準備好再繼續。</p>
+      <hr class="divider">
+      <fieldset class="field">
+        <legend>外觀主題</legend>
+        <div class="radio-row">
+          ${radio('theme', 'system', '跟隨系統')}${radio('theme', 'light', '淺色')}${radio('theme', 'dark', '深色')}
+        </div>
+      </fieldset>
+      <fieldset class="field">
+        <legend>股票漲跌顏色</legend>
+        <div class="radio-row">
+          ${radio('stockColor', 'tw', '<span class="neg">紅漲</span><span class="pos">綠跌</span>（台股）')}
+          ${radio('stockColor', 'us', '<span class="pos">綠漲</span><span class="neg">紅跌</span>（美股）')}
+        </div>
+      </fieldset>`;
+    el.addEventListener('change', (e) => {
+      if (e.target.type !== 'radio') return;
+      Store.saveSettings({ ...Store.getSettings(), [e.target.name]: e.target.value });
+      UI.applySettings();
+    });
+    return el;
+  }
 
   $('#btn-quit').addEventListener('click', async () => {
     const wasPaused = state.paused;
@@ -1120,6 +1281,8 @@
   buildBoard();
   requestAnimationFrame(() => fitBoard(false));
   announce('');
+
+  state.story.schedule = buildStory();
 
   // 開局保單類型與初始保單（父母買的舊保單）
   async function showStartingPolicies() {

@@ -55,8 +55,9 @@
   }
 
   async function chance(tile, ctx) {
-    const card = await drawCard('chance', ctx);
-    if (!card) return;
+    const raw = await drawCard('chance', ctx);
+    if (!raw) return;
+    const card = ctx.inflate(raw);
     // 選擇前不透露效果，讓玩家依情境判斷
     const choice = await UI.modal({
       title: '抽到機會牌',
@@ -118,15 +119,16 @@
   }
 
   async function fate(tile, ctx) {
-    const card = await drawCard('fate', ctx);
-    if (!card) return;
+    const raw = await drawCard('fate', ctx);
+    if (!raw) return;
+    const card = ctx.inflate(raw);
     ctx.stats.fateCount++;
     await resolveFate(card, ctx, { title: '抽到命運牌', tag: GameData.cardTagOf[card.id] || null });
   }
 
   // 重大疾病（js/game.js 依年齡與健康觸發）
   async function illness(ev, ctx) {
-    const card = { kind: 'fate', id: '重大疾病', cash: 0, netIncome: 0, health: 0, happiness: 0, ...ev };
+    const card = ctx.inflate({ kind: 'fate', id: '重大疾病', cash: 0, netIncome: 0, health: 0, happiness: 0, ...ev });
     await resolveFate(card, ctx, { title: '🚑 健康警訊', tag: ev.tag });
   }
 
@@ -171,7 +173,10 @@
       <article class="policy-offer" aria-labelledby="offer-${prod.id}">
         <div class="offer-head">
           <h3 id="offer-${prod.id}">${prod.icon} ${UI.escape(prod.name)}</h3>
-          <button class="btn btn-sm btn-primary" value="buy:${prod.id}">投保</button>
+          <div class="offer-actions">
+            <button class="btn btn-sm btn-ghost" type="button" data-proposal="${prod.id}">📄 建議書</button>
+            <button class="btn btn-sm btn-primary" value="buy:${prod.id}">投保</button>
+          </div>
         </div>
         <p class="offer-summary">${UI.escape(prod.summary)}</p>
         <ul class="effect-list" aria-label="保單條件">
@@ -208,8 +213,8 @@
     const ins = ctx.insurance;
     return {
       jobName: ctx.job.name,
-      salary: ctx.job.salary,
-      expense: ctx.job.expense,
+      salary: ctx.salaryNow(),
+      expense: ctx.expenseNow(),
       age: ctx.age(),
       health: ctx.state.health,
       cash: Math.round(ctx.state.cash),
@@ -284,7 +289,10 @@
           <div class="chat-rec">
             <div><strong>${prod.icon} ${UI.escape(prod.name)}</strong><span class="chat-rec-price">${UI.escape(price)}</span></div>
             <p>${UI.escape(r.reason)}</p>
-            <button class="btn btn-sm btn-primary" type="button" data-rec="${prod.id}" ${q.ok ? '' : 'disabled'}>投保</button>
+            <div class="chat-rec-actions">
+              <button class="btn btn-sm btn-ghost" type="button" data-proposal="${prod.id}">📄 建議書</button>
+              <button class="btn btn-sm btn-primary" type="button" data-rec="${prod.id}" ${q.ok ? '' : 'disabled'}>投保</button>
+            </div>
           </div>`;
       }
 
@@ -336,6 +344,7 @@
         if (btn.matches('[data-suggest]')) ask(btn.textContent);
         else if (btn.matches('[data-done]')) finish(false);
         else if (btn.matches('[data-list]')) finish(true);
+        else if (btn.dataset.proposal) ctx.openProposal(btn.dataset.proposal);
         else if (btn.dataset.rec) {
           const res = await purchase(Insurance.PRODUCTS[btn.dataset.rec], ctx);
           if (res) {
@@ -366,14 +375,20 @@
     const shown = offers.map((p) => p.name);
     let bought = 0;
     while (offers.length) {
+      const body = document.createElement('div');
+      body.className = 'event-card';
+      body.dataset.kind = 'insurance';
+      body.innerHTML = `
+        <p class="card-text">業務員帶來 ${offers.length} 種你目前可以投保的保險：</p>
+        <div class="policy-offers">${offers.map((p) => offerHtml(p, ins)).join('')}</div>
+        <p class="card-note">目前每月保費 ${UI.fmtMoney(ins.monthlyPremium())}，月薪的 ${Math.round((ins.monthlyPremium() / ctx.job.salary) * 100)}%（雙十原則建議約 ${Math.round(GameData.insurance.budgetRate * 100)}%）。</p>`;
+      body.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-proposal]');
+        if (btn) ctx.openProposal(btn.dataset.proposal);
+      });
       const choice = await UI.modal({
         title: '🛡️ 保險業務員來訪',
-        body: `
-          <div class="event-card" data-kind="insurance">
-            <p class="card-text">業務員帶來 ${offers.length} 種你目前可以投保的保險：</p>
-            <div class="policy-offers">${offers.map((p) => offerHtml(p, ins)).join('')}</div>
-            <p class="card-note">目前每月保費 ${UI.fmtMoney(ins.monthlyPremium())}，月薪的 ${Math.round((ins.monthlyPremium() / ctx.job.salary) * 100)}%（雙十原則建議約 ${Math.round(GameData.insurance.budgetRate * 100)}%）。</p>
-          </div>`,
+        body,
         actions: [{ label: bought ? '完成' : '暫不投保', value: 'skip', variant: 'ghost' }],
         dismissible: false,
         className: 'modal-wide',
@@ -426,7 +441,7 @@
     });
     const pip = await ctx.rollDice();
     const days = pip * cfg.daysPerPip;
-    const cost = days * cfg.costPerDay;
+    const cost = ctx.inflateAmount(days * cfg.costPerDay);
     ctx.stats.hospitalDays += days;
     const card = {
       kind: 'hospital', id: '住院', cash: -cost, netIncome: 0, health: 0,

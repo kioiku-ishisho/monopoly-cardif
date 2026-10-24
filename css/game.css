@@ -149,6 +149,10 @@
 .event-card[data-kind="insurance"] { --card-color: #1c7ed6; }
 .event-card[data-kind="hospital"] { --card-color: #e03131; }
 .event-card[data-kind="special"] { --card-color: #0ca678; }
+.event-card[data-kind="market"] { --card-color: #c2255c; }
+.story-source { margin: 0 0 6px; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); }
+.story-stocks li.up { color: var(--stock-up); }
+.story-stocks li.down { color: var(--stock-down); }
 
 /* 保險知識題（小學堂） */
 .quiz-q { font-size: 1.15rem; font-weight: 900; margin: 12px 0 8px; }
@@ -420,6 +424,7 @@
 .policy-offers { display: grid; gap: 12px; margin-top: 4px; }
 .policy-offer { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; }
 .offer-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.offer-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .offer-head h3 { margin: 0; font-size: 1.05rem; }
 .offer-summary { margin: 0 0 8px; font-weight: 700; }
 .policy-offer .effect-list li { font-size: 0.85rem; font-weight: 500; padding: 2px 10px; }
@@ -510,7 +515,7 @@
 .chat-rec { margin-top: 10px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--border); display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; }
 .chat-rec > div { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
 .chat-rec p { grid-column: 1; margin: 0; font-size: 0.9rem; color: var(--text-muted); }
-.chat-rec button { grid-column: 2; grid-row: 1 / span 2; }
+.chat-rec-actions { grid-column: 2; grid-row: 1 / span 2; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .chat-rec-price { font-size: 0.85rem; color: var(--text-muted); }
 .chat-suggest { display: flex; flex-wrap: wrap; gap: 6px; }
 .chat-form { display: flex; gap: 8px; }
