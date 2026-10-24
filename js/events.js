@@ -255,6 +255,7 @@
           <p class="chat-meta"></p>
         </div>
         <div class="modal-actions">
+          <button class="btn btn-ghost" type="button" data-mine>🗂️ 我的保單</button>
           <button class="btn btn-ghost" type="button" data-list>看業務員帶來的險種清單</button>
           <button class="btn btn-primary" type="button" data-done>結束對話</button>
         </div>`;
@@ -332,15 +333,19 @@
       async function showList() {
         dlg.close();
         bought += await offerList(ctx, { fromChat: true });
-        // 在清單投保過的險種，對話裡的推薦按鈕也要跟著停用
-        dlg.querySelectorAll('[data-rec]').forEach((b) => {
-          if (b.disabled) return;
-          const q = ctx.insurance.quote(Insurance.PRODUCTS[b.dataset.rec]);
-          if (!q.ok) { b.disabled = true; b.textContent = q.reason === '已經投保' ? '已投保' : '無法投保'; }
-        });
+        refreshRecs();
         dlg.showModal();
         updateMeta();
         if (!input.disabled) input.focus();
+      }
+
+      // 在清單或保險頁投保／解約後，推薦按鈕依最新報價更新
+      function refreshRecs() {
+        dlg.querySelectorAll('[data-rec]').forEach((b) => {
+          const q = ctx.insurance.quote(Insurance.PRODUCTS[b.dataset.rec]);
+          b.disabled = !q.ok;
+          b.textContent = q.ok ? '投保' : q.reason === '已經投保' ? '已投保' : '無法投保';
+        });
       }
 
       dlg.querySelector('.chat-form').addEventListener('submit', (e) => {
@@ -356,6 +361,7 @@
         if (btn.matches('[data-suggest]')) ask(btn.textContent);
         else if (btn.matches('[data-done]')) finish();
         else if (btn.matches('[data-list]')) showList();
+        else if (btn.matches('[data-mine]')) { await ctx.showMyPolicies(); refreshRecs(); }
         else if (btn.dataset.proposal) ctx.openProposal(btn.dataset.proposal);
         else if (btn.dataset.rec) {
           const res = await purchase(Insurance.PRODUCTS[btn.dataset.rec], ctx);
@@ -394,10 +400,13 @@
       body.innerHTML = `
         <p class="card-text">業務員帶來 ${offers.length} 種你目前可以投保的保險：</p>
         <div class="policy-offers">${offers.map((p) => offerHtml(p, ins)).join('')}</div>
-        <p class="card-note">目前每月保費 ${UI.fmtMoney(ins.monthlyPremium())}，月薪的 ${Math.round((ins.monthlyPremium() / ctx.job.salary) * 100)}%（雙十原則建議約 ${Math.round(GameData.insurance.budgetRate * 100)}%）。</p>`;
+        <p class="card-note">目前每月保費 ${UI.fmtMoney(ins.monthlyPremium())}，月薪的 ${Math.round((ins.monthlyPremium() / ctx.job.salary) * 100)}%（雙十原則建議約 ${Math.round(GameData.insurance.budgetRate * 100)}%）。
+          <button class="btn btn-sm btn-ghost" type="button" data-mine>🗂️ 我的保單</button></p>`;
       body.addEventListener('click', (e) => {
-        const btn = e.target.closest('[data-proposal]');
-        if (btn) ctx.openProposal(btn.dataset.proposal);
+        const btn = e.target.closest('[data-proposal],[data-mine]');
+        if (!btn) return;
+        if (btn.dataset.proposal) ctx.openProposal(btn.dataset.proposal);
+        else ctx.showMyPolicies();
       });
       const choice = await UI.modal({
         title: '🛡️ 保險業務員來訪',
@@ -567,17 +576,97 @@
     }
   }
 
-  // 2. 財務規劃講座：小額現金 + 一則理財小知識
+  // 2. 理財講座：第一頁讀完一篇文章（捲到底才能進下一頁），第二頁回答依文章出的題目
+  //    出席給基本現金，每答對一題再加 perCorrect
   async function seminar(tile, ctx) {
     const cfg = SP().seminar;
-    const tip = GameData.tips[Math.floor(Math.random() * GameData.tips.length)];
+    const title = '🎓 理財講座';
+    const used = (ctx.state.seminarUsed ||= []);
+    const art = Seminar.pick(used);
+    used.push(art.id);
+
+    // ---- 第一頁：文章 ----
+    const article = document.createElement('div');
+    article.innerHTML = `
+      <article class="event-card seminar-article" data-kind="special">
+        <h3 class="seminar-title">${UI.escape(art.title)}</h3>
+        <p class="seminar-lead">${UI.escape(art.lead)}</p>
+        ${art.sections.map((s) => `
+          <h4>${UI.escape(s.h)}</h4>
+          ${s.p.map((t) => `<p>${UI.escape(t)}</p>`).join('')}`).join('')}
+        <p class="seminar-end">— 文章結束，接下來請回答 ${art.questions.length} 題問答 —</p>
+      </article>`;
+    const reading = UI.modal({
+      title,
+      body: article,
+      actions: [{ label: '請先往下滑讀完文章', value: 'next', variant: 'primary' }],
+      dismissible: false,
+      className: 'modal-wide modal-seminar',
+    });
+    const scroller = article.closest('.modal-body');
+    const nextBtn = article.closest('dialog').querySelector('.modal-actions .btn');
+    nextBtn.disabled = true;
+    const unlock = () => {
+      if (scroller.scrollTop + scroller.clientHeight < scroller.scrollHeight - 8) return;
+      nextBtn.disabled = false;
+      nextBtn.textContent = '下一頁：開始問答';
+      scroller.removeEventListener('scroll', unlock);
+    };
+    scroller.addEventListener('scroll', unlock, { passive: true });
+    requestAnimationFrame(unlock); // 文章短到不用捲動時直接解鎖
+    await reading;
+
+    // ---- 第二頁：問答 ----
+    const letters = ['A', 'B', 'C', 'D'];
+    const picked = art.questions.map(() => null);
+    const quiz = document.createElement('div');
+    quiz.innerHTML = `
+      <div class="event-card" data-kind="special">
+        <p class="card-text">根據剛剛讀的「${UI.escape(art.title)}」，回答下列問題：</p>
+        ${art.questions.map((q, qi) => `
+          <fieldset class="seminar-q">
+            <legend>${qi + 1}. ${UI.escape(q.q)}</legend>
+            ${q.options.map((o, oi) => `<button type="button" class="btn btn-ghost seminar-opt" data-q="${qi}" data-o="${oi}" aria-pressed="false">${letters[oi]}. ${UI.escape(o)}</button>`).join('')}
+          </fieldset>`).join('')}
+      </div>`;
+    const answering = UI.modal({
+      title,
+      body: quiz,
+      actions: [{ label: '送出答案', value: 'submit', variant: 'primary' }],
+      dismissible: false,
+      className: 'modal-wide modal-seminar',
+    });
+    const submitBtn = quiz.closest('dialog').querySelector('.modal-actions .btn');
+    submitBtn.disabled = true;
+    quiz.addEventListener('click', (e) => {
+      const opt = e.target.closest('.seminar-opt');
+      if (!opt) return;
+      const qi = Number(opt.dataset.q);
+      picked[qi] = Number(opt.dataset.o);
+      quiz.querySelectorAll(`.seminar-opt[data-q="${qi}"]`).forEach((b) => b.setAttribute('aria-pressed', String(b === opt)));
+      submitBtn.disabled = picked.includes(null);
+    });
+    await answering;
+
+    // ---- 結果 ----
+    const correct = art.questions.filter((q, i) => picked[i] === q.answer).length;
+    const cash = cfg.cash + correct * cfg.perCorrect;
     await UI.alert({
-      title: '🎓 財務規劃講座',
-      html: specialHtml('你參加了一場理財講座，學會區分緊急預備金、儲蓄與保險的功能。',
-        [`💰 現金 ${UI.fmtSigned(cfg.cash)}`], `💡 ${tip.title}：${tip.text}`),
+      title,
+      html: `
+        <div class="event-card" data-kind="special">
+          <p class="quiz-result ${correct === art.questions.length ? 'pos' : correct ? '' : 'neg'}">答對 ${correct} / ${art.questions.length} 題</p>
+          <ol class="seminar-review">
+            ${art.questions.map((q, i) => `
+              <li>${picked[i] === q.answer ? '⭕' : '❌'} ${UI.escape(q.q)}<br>
+                <span class="card-note">正確答案：<strong>${UI.escape(q.options[q.answer])}</strong></span></li>`).join('')}
+          </ol>
+          <ul class="effect-list"><li>💰 出席獎勵 ${UI.fmtSigned(cfg.cash)}</li>${correct ? `<li>🧠 答對獎勵 ${UI.fmtSigned(correct * cfg.perCorrect)}</li>` : ''}</ul>
+        </div>`,
       dismissible: false,
     });
-    ctx.applyEffects({ cash: cfg.cash }, '參加財務規劃講座', '🎓');
+    ctx.logDecision(`理財講座「${art.title}」問答答對 ${correct}/${art.questions.length}`, 'special');
+    ctx.applyEffects({ cash }, '參加理財講座', '🎓');
   }
 
   // 3. 保障觀念挑戰：答對加現金，答錯買到不符合需求的保單

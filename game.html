@@ -70,6 +70,31 @@
     </div>
   </main>
 
+  <!-- 電腦版右側欄：常駐顯示股票、保險、歷史事件（窄螢幕隱藏，改用右上按鈕） -->
+  <aside class="side-panel" id="side-panel" aria-label="遊戲資訊">
+    <section class="side-card" aria-labelledby="side-stock-title">
+      <div class="side-head">
+        <h2 id="side-stock-title">📈 股票</h2>
+        <button class="btn btn-sm btn-ghost" type="button" data-side-open="btn-stock">交易</button>
+      </div>
+      <div id="side-stock"></div>
+    </section>
+    <section class="side-card" aria-labelledby="side-policy-title">
+      <div class="side-head">
+        <h2 id="side-policy-title">🛡️ 保險</h2>
+        <button class="btn btn-sm btn-ghost" type="button" data-side-open="btn-policy">管理</button>
+      </div>
+      <div id="side-policy"></div>
+    </section>
+    <section class="side-card side-history" aria-labelledby="side-history-title">
+      <div class="side-head">
+        <h2 id="side-history-title">📰 最近事件</h2>
+        <button class="btn btn-sm btn-ghost" type="button" data-side-open="btn-history">全部</button>
+      </div>
+      <ol class="side-events" id="side-history"></ol>
+    </section>
+  </aside>
+
   <footer class="player-bar">
     <button class="player-summary" type="button" id="btn-sheet" aria-expanded="false" aria-controls="sheet">
       <span class="stat">
@@ -146,8 +171,17 @@
   <script src="js/api.js"></script>
   <script src="js/insurance.js"></script>
   <script src="js/quiz.js"></script>
+  <script src="js/seminar.js"></script>
   <script src="js/events.js"></script>
   <script src="js/world.js"></script>
+  <script src="js/game/core.js"></script>
+  <script src="js/game/map.js"></script>
+  <script src="js/game/panels.js"></script>
+  <script src="js/game/policies.js"></script>
+  <script src="js/game/market.js"></script>
+  <script src="js/game/context.js"></script>
+  <script src="js/game/report.js"></script>
+  <script src="js/game/turn.js"></script>
   <script src="js/game.js"></script>
 </body>
 </html>

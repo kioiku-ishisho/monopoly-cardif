@@ -209,5 +209,5 @@ js/score.js             計分標準（本機評分與伺服器評分共用）
 docs/event-cards.md     事件牌清單原稿
 firestore.rules         Firestore 安全規則（全部拒絕瀏覽器存取）
 vercel.json             Function 設定（評分最長 120 秒）
-css/ js/ *.html         前端（js/world.js 產生不規則人生圈的地圖幾何，js/quiz.js 為保險知識題庫）
+css/ js/ *.html         前端（js/world.js 產生不規則人生圈的地圖幾何，js/quiz.js 為保險知識題庫；遊戲頁拆成 js/game/ 底下的模組，說明見 js/game.js 開頭）
 ```

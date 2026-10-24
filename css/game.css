@@ -539,3 +539,61 @@
 .chat-form input { flex: 1; min-width: 0; min-height: 44px; padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; }
 .chat-meta { margin: 0; font-size: 0.8rem; color: var(--text-muted); }
 @media (prefers-reduced-motion: reduce) { .chat-msg.typing .dots { animation: none; } }
+
+/* ===== 電腦版右側欄：常駐顯示股票、保險、最近事件 ===== */
+.side-panel { display: none; }
+@media (min-width: 1100px) {
+  .page-game { grid-template-columns: minmax(0, 1fr) 340px; }
+  .game-top { grid-column: 1 / -1; grid-row: 1; }
+  .game-main { grid-column: 1; grid-row: 2; }
+  .player-bar { grid-column: 1; grid-row: 3; }
+  .side-panel {
+    grid-column: 2;
+    grid-row: 2 / 4;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 12px;
+    background: var(--surface);
+    border-left: 2px solid var(--border);
+    z-index: 20;
+  }
+}
+:root[data-theme="dark"]:not([data-contrast="high"]) .side-panel { background: #06140d; }
+.side-card { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; background: var(--surface-2); }
+.side-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.side-head h2 { margin: 0; font-size: 1rem; }
+.side-sum { display: flex; flex-wrap: wrap; gap: 2px 12px; margin: 0 0 8px; font-size: 0.85rem; font-weight: 700; }
+.side-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.side-stock { display: grid; grid-template-columns: 1fr auto; gap: 0 8px; font-size: 0.9rem; padding-bottom: 6px; border-bottom: 1px dashed var(--border); }
+.side-stock:last-child { border-bottom: 0; padding-bottom: 0; }
+.side-stock .ss-name { font-weight: 700; }
+.side-stock .ss-price { text-align: right; font-weight: 900; }
+.side-stock .ss-price small { margin-left: 4px; font-size: 0.8rem; }
+.side-stock .ss-hold { color: var(--text-muted); font-size: 0.8rem; }
+.side-stock .ss-pnl { text-align: right; font-size: 0.8rem; font-weight: 700; }
+.side-policy { display: flex; justify-content: space-between; gap: 8px; font-size: 0.9rem; }
+.side-policy .sp-status { color: var(--text-muted); font-size: 0.8rem; text-align: right; }
+.side-history { flex: 1; min-height: 160px; }
+.side-events { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.side-events li { display: grid; grid-template-columns: auto 1fr; gap: 0 8px; font-size: 0.85rem; }
+.side-events .e-meta { grid-column: 2; font-size: 0.75rem; color: var(--text-muted); }
+.side-panel .empty { margin: 0; font-size: 0.85rem; color: var(--text-muted); }
+
+/* 理財講座：文章頁＋問答頁 */
+.modal-seminar .modal-body { scroll-behavior: smooth; }
+.seminar-article { line-height: 1.8; }
+.seminar-article h4 { margin: 18px 0 4px; font-size: 1.05rem; }
+.seminar-article p { margin: 0 0 8px; }
+.seminar-title { margin: 0 0 6px; font-size: 1.3rem; font-weight: 900; }
+.seminar-lead { color: var(--text-muted); font-weight: 700; }
+.seminar-end { margin-top: 20px !important; text-align: center; color: var(--text-muted); font-size: 0.9rem; }
+.modal-seminar .modal-actions .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.seminar-q { border: 0; padding: 0; margin: 16px 0 0; display: flex; flex-direction: column; gap: 6px; }
+.seminar-q legend { font-weight: 900; margin-bottom: 6px; padding: 0; }
+.seminar-opt { justify-content: flex-start; text-align: left; white-space: normal; }
+.seminar-opt[aria-pressed="true"] { border-color: var(--card-color); box-shadow: inset 0 0 0 1px var(--card-color); background: color-mix(in srgb, var(--card-color) 22%, transparent); font-weight: 900; }
+.seminar-review { margin: 8px 0 12px; }
+.seminar-review .card-note { margin: 0; }

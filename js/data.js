@@ -121,7 +121,7 @@
   const specialTiles = {
     quizSeconds: 20, // 答題限時
     checkup: { cash: 3000, coupon: { rate: 0.1, cap: 1000 } }, // 答對二選一：現金或保費優惠
-    seminar: { cash: 2000 },
+    seminar: { cash: 1000, perCorrect: 500 }, // 出席獎勵 + 每答對一題（js/seminar.js 每篇 3 題）
     myth: { win: 2000, lose: -2000 },
     mentor: { steps: 3 },
     promo: { rate: 0.2, cap: 2000 }, // 下一次投保首年保費折抵 20%，上限 2,000

@@ -261,7 +261,7 @@ function runGame(job, strategy) {
       }
       case 'insurance': buyPlanned(); break;
       case 'checkup': if (rand() < quizRate) apply({ cash: SP.checkup.cash }); break;
-      case 'seminar': apply({ cash: SP.seminar.cash }); break;
+      case 'seminar': apply({ cash: SP.seminar.cash + 3 * SP.seminar.perCorrect * quizRate }); break;
       case 'myth': apply({ cash: rand() < quizRate ? SP.myth.win : SP.myth.lose }); break;
       case 'mentor':
         for (let i = 0; i < SP.mentor.steps; i++) step();
