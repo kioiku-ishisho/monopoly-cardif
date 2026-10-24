@@ -1,7 +1,9 @@
 // POST /api/evaluate  { gameId, playerId, record } -> { evaluation, rank }
-// 由 Claude 依評分規準打分、總結與建議；結果寫入 Firestore 並計算全服排名。每局只評一次。
+// 分數由 js/score.js 的計分標準算出（和本機評分同一套），Claude 依分數撰寫總結、決策回顧與建議；
+// 結果寫入 Firestore 並計算全服排名。每局只評一次。
 import Anthropic from '@anthropic-ai/sdk';
 import { FieldValue } from 'firebase-admin/firestore';
+import { scoring } from './_lib/catalog.js';
 import { findCard } from './_lib/decks.js';
 import { db } from './_lib/firebase.js';
 import { GAME_ID, HttpError, PLAYER_ID, postHandler } from './_lib/http.js';
@@ -11,23 +13,19 @@ const MODEL = process.env.CLAUDE_MODEL || 'claude-haiku-5-5';
 const DAILY_LIMIT = Number(process.env.EVAL_DAILY_LIMIT || 20); // 每位玩家每天最多評分幾局
 const MAX_RECORD_BYTES = 100_000;
 
-// 各項滿分；Claude 給的分數會再夾在 0～滿分之間後加總
-const MAX_POINTS = { longevity: 30, wealth: 35, health: 15, riskManagement: 10, ending: 10 };
 // 需與 js/data.js 的 tips id 一致（結算頁會依此解鎖提示）
 const TIP_IDS = ['emergency', 'rule72', 'diversify', 'insurance', 'compound', 'healthwealth', 'retirement', 'budget', 'dca', 'panic'];
 
 const SYSTEM_PROMPT = `你是「人生富翁」理財教育遊戲的評審。玩家從 25 歲開始，以某個職業走過青年、中年、老年，透過機會牌（可選擇）、命運牌（無法選擇）、保險與股票投資做財務決策。遊戲在破產、健康歸零、幸福歸零（unhappy，失去生活動力）或活到 100 歲時結束。幸福指數 0–100 約等於心理健康，由人際、休閒、壓力、悲傷等事件增減。
 
-保險有十一種可投保：定期壽險、意外險、醫療險（實支實付）、重大傷病險、特定傷病險、癌症險、長照險、投資型保險、住院日額險、終身壽險（分紅）、年金險；另有開局隨機取得、已繳清的舊保單（policies 裡 legacy 為 true，保障偏低，不是玩家自己買的）。保費每月扣款，繳不出會停效。健康 ≤ 30 會進入長照狀態，每月多 3 萬照護費。退休後收入只剩月薪 40%，年金險可以補退休缺口。身故時壽險等給付計入 legacy（留給家人），不算玩家自己的淨資產。
+保險有十一種可投保（玩家可以隨時在保險頁投保，也可以問 AI 業務員）：定期壽險、意外險、醫療險（實支實付）、重大傷病險、特定傷病險、癌症險、長照險、投資型保險、住院日額險、終身壽險（分紅）、年金險；另有開局隨機取得、已繳清的舊保單（policies 裡 legacy 為 true，保障偏低，不是玩家自己買的）。保費每月扣款，繳不出會停效。健康 ≤ 30 會進入長照狀態，每月多 3 萬照護費。物價每年上漲，薪資每 5 年只調升 1%；退休後收入降為月薪的 70%（隨物價調整），年金險可以補退休缺口。股市會經歷取材自真實歷史的經濟事件（marketEvents）。身故時壽險等給付計入 legacy（留給家人），不算玩家自己的淨資產。
 
-請依下列規準為這一局評分（每項給整數）：
-- longevity（0–30）：活得越久越高；100 歲滿分，40 歲前結束接近 0。
-- wealth（0–35）：最終淨資產相對年薪的倍數（wealthRatio）；破產為 0，約 20 倍年薪以上接近滿分。高薪職業不應只因薪水高而得高分。
-- health（0–15）：平均健康指數與健康相關選擇。
-- riskManagement（0–10）：保險組合是否涵蓋主要風險（醫療、重大傷病、長照、退休）、是否及早投保、保費是否符合雙十原則（maxPremiumRatio 約 0.1，明顯超過或停效都要扣分）、是否分散投資、有沒有被迫賣股、面對機會牌時是否權衡風險。
-- ending（0–10）：活到 100 歲 10 分；65 歲後健康耗盡約 6 分；65 歲前約 2 分；幸福歸零 65 歲後約 4 分、65 歲前約 1 分；破產 0 分。
+分數已經由程式依計分標準算好，附在資料的「## 分數」裡，你不需要打分。計分標準（100 分，不計入剩餘資產）：
+壽命 20（結束年齡 ÷ 100）、幸福指數 20（平均幸福）、健康指數 20（平均健康）、
+保險決策 20（是否及早買醫療、重大疾病、意外、長照或年金等保障，保費占月薪 5–15%，醫療支出被理賠的比例，有沒有停效）、
+理財決策 10（保有 3 個月以上生活費的比例、分散投資、有沒有被迫賣股）、保險知識 10（特殊格知識題答對率）。
 
-接著用繁體中文（台灣用語）撰寫：
+請參考分數明細，用繁體中文（台灣用語）撰寫，說明時要和分數一致（例如保險決策分數低，就具體指出缺了哪些保障）：
 - summary：3～5 句的人生總結，引用具體數字與事件，語氣溫暖但誠實。
 - decisions：4～8 則決策回顧，type 為 good（好決策）、bad（待改進）或 info（中性紀錄），每則一句，盡量指出玩家實際做過的選擇。
 - advice：3～5 則具體、可在下一局實踐的理財建議，每則對應一個最相關的 tip。
@@ -39,14 +37,8 @@ const SYSTEM_PROMPT = `你是「人生富翁」理財教育遊戲的評審。玩
 const SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['breakdown', 'summary', 'decisions', 'advice'],
+  required: ['summary', 'decisions', 'advice'],
   properties: {
-    breakdown: {
-      type: 'object',
-      additionalProperties: false,
-      required: Object.keys(MAX_POINTS),
-      properties: Object.fromEntries(Object.keys(MAX_POINTS).map((k) => [k, { type: 'integer' }])),
-    },
     summary: { type: 'string' },
     decisions: {
       type: 'array',
@@ -73,15 +65,6 @@ const SCHEMA = {
 let anthropic;
 const claude = () => (anthropic ||= new Anthropic());
 
-function gradeOf(score) {
-  if (score >= 90) return 'S';
-  if (score >= 75) return 'A';
-  if (score >= 60) return 'B';
-  if (score >= 40) return 'C';
-  return 'D';
-}
-
-const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 // 只挑評分需要的欄位，避免把整份紀錄原封不動送出
 function facts(r) {
@@ -89,7 +72,9 @@ function facts(r) {
     'finalHealth', 'finalHappiness', 'avgHappiness', 'minHappiness', 'stockValue', 'netWorth', 'peakNetWorth', 'avgHealth', 'minHealth', 'laps', 'turns', 'trades',
     'distinctStocks', 'realizedPnL', 'forcedSales', 'netIncomeAdj', 'insured', 'firstInsuredAge', 'policies',
     'premiumsPaid', 'monthlyPremium', 'maxPremiumRatio', 'policyValue', 'legacy', 'legacyItems', 'medicalHistory',
-    'majorIllness', 'ltcAge', 'chanceAccepted', 'chanceDeclined', 'fateCount', 'claims', 'claimTotal', 'holdings'];
+    'majorIllness', 'ltcAge', 'chanceAccepted', 'chanceDeclined', 'fateCount', 'claims', 'claimTotal', 'holdings',
+    'medicalCost', 'lapses', 'emergencyRate', 'avgPremiumRatio', 'quizAsked', 'quizCorrect', 'priceIndex', 'finalSalary',
+    'interestTotal', 'marketEvents'];
   const out = Object.fromEntries(pick.filter((k) => k in r).map((k) => [k, r[k]]));
   out.wealthRatio = r.salary ? Math.round((Math.max(0, r.netWorth) / (r.salary * 12)) * 10) / 10 : 0;
   return out;
@@ -115,8 +100,12 @@ async function drawLines(game) {
   return lines;
 }
 
-async function askClaude(record, lines) {
+async function askClaude(record, lines, scored) {
+  const { LABELS, MAX } = scoring();
   const content = [
+    '## 分數',
+    `總分 ${scored.score}（${scored.grade} 級）`,
+    ...Object.entries(scored.breakdown).map(([k, v]) => `- ${LABELS[k]} ${v}/${MAX[k]}：${(scored.details[k] || []).join('；')}`),
     '## 結算數據',
     JSON.stringify(facts(record)),
     '## 玩家決策紀錄（遊戲內）',
@@ -143,15 +132,12 @@ async function askClaude(record, lines) {
   return JSON.parse(text);
 }
 
-function toEvaluation(out) {
-  const breakdown = Object.fromEntries(
-    Object.entries(MAX_POINTS).map(([k, max]) => [k, clamp(Math.round(Number(out.breakdown?.[k]) || 0), 0, max)]),
-  );
-  const score = Object.values(breakdown).reduce((a, b) => a + b, 0);
+function toEvaluation(out, scored) {
   return {
-    score,
-    grade: gradeOf(score),
-    breakdown,
+    score: scored.score,
+    grade: scored.grade,
+    breakdown: scored.breakdown,
+    details: scored.details,
     summary: String(out.summary || ''),
     decisions: (out.decisions || []).slice(0, 8),
     advice: (out.advice || []).filter((a) => TIP_IDS.includes(a.tip)).slice(0, 5),
@@ -186,7 +172,8 @@ export default postHandler(async (req, body) => {
 
   let evaluation;
   try {
-    evaluation = toEvaluation(await askClaude(record, await drawLines(game)));
+    const scored = scoring().compute(record);
+    evaluation = toEvaluation(await askClaude(record, await drawLines(game), scored), scored);
   } catch (e) {
     console.error('Claude 評分失敗', e);
     throw new HttpError(503, 'ai_unavailable');

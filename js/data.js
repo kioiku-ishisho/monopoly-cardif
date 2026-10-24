@@ -37,12 +37,18 @@
     startCashMonths: 3, // 起始現金 = 月薪 × 3
     startHappiness: 70, // 幸福指數（約等於心理健康）起始值，0–100，歸零遊戲結束
     maxAge: 100, // 到達此年齡時遊戲以「壽終正寢」結束
+    // 以下數值經 scripts/simulate.mjs 調整：不做規劃約 50% 失敗、有規劃約 13% 失敗
     // 各階段收入倍率（老年為退休金）
-    incomeRate: { youth: 1, middle: 1.3, elder: 0.4 },
-    // 每過一圈健康自然下降
-    healthDecayPerLap: { youth: 0, middle: 4, elder: 10 },
+    incomeRate: { youth: 1, middle: 1.3, elder: 0.7 },
+    pensionIndexed: true, // 退休金依退休後的物價調整
+    // 每過一圈健康的變化（正數為下降、負數為自然恢復）
+    healthDecayPerLap: { youth: -5, middle: -3, elder: 2 },
+    // 每過一圈幸福自然下降（生活的消磨，要靠休閒、人際等機會牌補回來）
+    happinessDecayPerLap: { youth: 3, middle: 4, elder: 4 },
+    // 經濟壓力：過起點時現金不到 months 個月生活費，幸福再減 happiness
+    stress: { months: 3, happiness: 6 },
     // 通膨：物價指數每年上漲 inflation，生活費與事件牌金額跟著物價調整；薪資（含退休金）每圈調升 salaryGrowthPerLap
-    inflation: 0.02,
+    inflation: 0.005,
     salaryGrowthPerLap: 0.01,
     // 現金放銀行的年利率，每月計息（只算正的現金）
     bankRate: 0.015,

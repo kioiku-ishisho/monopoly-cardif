@@ -135,6 +135,7 @@
   // 命運事件：依疾病標籤理賠，再套用影響
   async function resolveFate(card, ctx, { title, tag, days, reason = `命運：${card.text}` }) {
     const cost = card.cash < 0 ? -card.cash : 0;
+    if (tag && cost) ctx.stats.medicalCost += cost;
     const result = ctx.insurance.claim({ tag, cost, days });
     const extra = [];
     if (tag) extra.push(`🏷️ ${Insurance.TAG_NAME[tag]}`);
@@ -201,11 +202,8 @@
 
   // 保險格：連得上伺服器時和 AI 業務員對話，否則改用「隨機介紹 3 種險種」
   async function insurance(tile, ctx) {
-    if (ctx.gameId()) {
-      const ok = await agentChat(ctx);
-      if (ok) return;
-    }
-    await offerList(ctx);
+    if (ctx.gameId()) await agentChat(ctx);
+    else await offerList(ctx);
   }
 
   // 給 AI 業務員的玩家狀況與目前報價
@@ -231,7 +229,7 @@
   const AGENT_MAX_QUESTIONS = 6;
   const AGENT_SUGGESTIONS = ['我現在最需要什麼保險？', '醫療險和住院日額險差在哪？', '我的保費會不會太高？'];
 
-  // AI 業務員對話視窗；玩家選擇「看險種清單」時回傳 false
+  // AI 業務員對話視窗；「看險種清單」會暫時切到清單，看完回到對話，按「結束對話」才結束來訪
   function agentChat(ctx) {
     return new Promise((resolve) => {
       const history = [];
@@ -323,12 +321,26 @@
         input.focus();
       }
 
-      // showList：改用險種清單畫面（回傳 false 交給 offerList）
-      function finish(showList) {
+      function finish() {
         dlg.close();
         dlg.remove();
-        if (!bought && !showList) ctx.logDecision(`${ctx.age()} 歲和保險業務員聊過，暫不投保`, 'insurance-decline');
-        resolve(!showList);
+        if (!bought) ctx.logDecision(`${ctx.age()} 歲和保險業務員聊過，暫不投保`, 'insurance-decline');
+        resolve();
+      }
+
+      // 切到險種清單，關閉清單後回到同一段對話
+      async function showList() {
+        dlg.close();
+        bought += await offerList(ctx, { fromChat: true });
+        // 在清單投保過的險種，對話裡的推薦按鈕也要跟著停用
+        dlg.querySelectorAll('[data-rec]').forEach((b) => {
+          if (b.disabled) return;
+          const q = ctx.insurance.quote(Insurance.PRODUCTS[b.dataset.rec]);
+          if (!q.ok) { b.disabled = true; b.textContent = q.reason === '已經投保' ? '已投保' : '無法投保'; }
+        });
+        dlg.showModal();
+        updateMeta();
+        if (!input.disabled) input.focus();
       }
 
       dlg.querySelector('.chat-form').addEventListener('submit', (e) => {
@@ -342,8 +354,8 @@
         const btn = e.target.closest('button');
         if (!btn) return;
         if (btn.matches('[data-suggest]')) ask(btn.textContent);
-        else if (btn.matches('[data-done]')) finish(false);
-        else if (btn.matches('[data-list]')) finish(true);
+        else if (btn.matches('[data-done]')) finish();
+        else if (btn.matches('[data-list]')) showList();
         else if (btn.dataset.proposal) ctx.openProposal(btn.dataset.proposal);
         else if (btn.dataset.rec) {
           const res = await purchase(Insurance.PRODUCTS[btn.dataset.rec], ctx);
@@ -364,13 +376,14 @@
     });
   }
 
-  // 業務員隨機介紹 3 種符合年齡與健康條件的險種，可以買其中幾種
-  async function offerList(ctx) {
+  // 業務員隨機介紹 3 種符合年齡與健康條件的險種，可以買其中幾種；回傳投保了幾種
+  // fromChat：從 AI 對話切過來，離開按鈕改為「回到對話」，婉拒紀錄交給對話結束時處理
+  async function offerList(ctx, { fromChat = false } = {}) {
     const ins = ctx.insurance;
     let offers = ins.offers();
     if (!offers.length) {
       UI.toast('🛡️ 目前沒有你能投保的新險種');
-      return;
+      return 0;
     }
     const shown = offers.map((p) => p.name);
     let bought = 0;
@@ -389,7 +402,7 @@
       const choice = await UI.modal({
         title: '🛡️ 保險業務員來訪',
         body,
-        actions: [{ label: bought ? '完成' : '暫不投保', value: 'skip', variant: 'ghost' }],
+        actions: [{ label: fromChat ? '回到對話' : bought ? '完成' : '暫不投保', value: 'skip', variant: 'ghost' }],
         dismissible: false,
         className: 'modal-wide',
       });
@@ -399,7 +412,8 @@
       bought++;
       offers = offers.filter((p) => p.id !== prod.id);
     }
-    if (!bought) ctx.logDecision(`${ctx.age()} 歲婉拒投保（${shown.join('、')}）`, 'insurance-decline');
+    if (!bought && !fromChat) ctx.logDecision(`${ctx.age()} 歲婉拒投保（${shown.join('、')}）`, 'insurance-decline');
+    return bought;
   }
 
   // 投保流程（保險格與保險頁共用）：選金額、風險確認、投保；成功回傳 buy() 的結果，取消回傳 null

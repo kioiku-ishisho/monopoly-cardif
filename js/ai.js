@@ -5,42 +5,11 @@
  * 無法連線（直接開啟檔案、API 失敗、超過每日次數）時：改用下方的本機規則評分，不列入排行榜。
  */
 (function () {
-  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   const money = (n) => UI.fmtMoney(n);
 
-  function gradeOf(score) {
-    if (score >= 90) return 'S';
-    if (score >= 75) return 'A';
-    if (score >= 60) return 'B';
-    if (score >= 40) return 'C';
-    return 'D';
-  }
-
+  // 分數依 js/score.js 的計分標準；這裡只負責離線時的文字總結與建議
   function localEvaluate(r) {
-    const maxAge = GameData.economy.maxAge;
-    const yearlySalary = r.salary * 12;
-
-    // 壽命（30）
-    const longevity = clamp(((r.finalAge - 25) / (maxAge - 25)) * 30, 0, 30);
-    // 財富（35）：淨資產相對年薪的倍數，取對數避免高薪職業過度領先
-    const wealthRatio = Math.max(0, r.netWorth) / yearlySalary;
-    const wealth = r.endReason === 'bankrupt' ? 0 : clamp((Math.log2(1 + wealthRatio) / Math.log2(1 + 20)) * 35, 0, 35);
-    // 健康（15）
-    const health = clamp((r.avgHealth / 100) * 15, 0, 15);
-    // 投資與風險管理（10）
-    let invest = 0;
-    if (r.trades > 0) invest += 3;
-    if (r.distinctStocks >= 2) invest += 2;
-    if (r.realizedPnL > 0 || r.stockValue > 0) invest += 2;
-    if (r.insured) invest += r.firstInsuredAge != null && r.firstInsuredAge < 40 ? 3 : 2;
-    if ((r.maxPremiumRatio || 0) > 0.2) invest -= 1; // 保費遠超過雙十原則
-    if (r.forcedSales > 0) invest -= 3;
-    invest = clamp(invest, 0, 10);
-    // 結局（10）
-    const ending = { maxAge: 10, death: r.finalAge >= 65 ? 6 : 2, unhappy: r.finalAge >= 65 ? 4 : 1, bankrupt: 0 }[r.endReason] ?? 0;
-
-    const score = Math.round(longevity + wealth + health + invest + ending);
-    const grade = gradeOf(score);
+    const { score, grade, breakdown, details } = Score.compute(r);
 
     // ---- 總結 ----
     const endPhrase = {
@@ -102,7 +71,7 @@
     advice.push({ tip: 'budget', text: '可以用 50/30/20 法則分配收入：必要支出 50%、想要 30%、儲蓄投資 20%。' });
     if (advice.length < 4) advice.push({ tip: 'dca', text: '嘗試定期定額投入指數型 ETF，不必預測高低點，也能平均成本。' });
 
-    return { score, grade, summary, decisions, advice: advice.slice(0, 5), breakdown: { longevity, wealth, health, invest, ending }, source: 'local' };
+    return { score, grade, summary, decisions, advice: advice.slice(0, 5), breakdown, details, source: 'local' };
   }
 
   const OFFLINE_REASON = {

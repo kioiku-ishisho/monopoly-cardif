@@ -52,7 +52,7 @@
 
       <table class="doc-meta">
         <tbody>
-          <tr><th scope="row">被保險人</th><td>${job.icon} ${UI.escape(job.name)}</td><th scope="row">投保年齡</th><td>${age} 歲</td></tr>
+          <tr><th scope="row">被保險人</th><td>${job.icon} ${UI.escape(job.name)}</td><th scope="row">投保年齡</th><td>${Math.floor(age)} 歲</td></tr>
           <tr><th scope="row">保費計算</th><td>${PRICING_TEXT[prod.pricing]}</td><th scope="row">首年月繳保費</th><td><strong>${num(monthly)} 元</strong>${surcharge > 1 ? `（含健康加費 ${Math.round((surcharge - 1) * 100)}%）` : ''}</td></tr>
           <tr><th scope="row">繳費年期</th><td>${Insurance.payTermText(prod)}</td><th scope="row">保障期間</th><td>${Insurance.coverText(prod)}</td></tr>
           <tr><th scope="row">等待期</th><td>${Insurance.waitText(prod)}</td><th scope="row">試算總繳保費</th><td>${num(totalPaid)} 元</td></tr>
@@ -88,7 +88,7 @@
             <tbody>
               ${rows.map((r) => `
                 <tr class="${r.year % 5 === 0 ? 'mark' : ''}">
-                  <td>${r.year}</td><td>${r.age}</td><td>${r.premium ? num(r.premium) : ''}</td><td>${num(r.total)}</td>
+                  <td>${r.year}</td><td>${Math.floor(r.age)}</td><td>${r.premium ? num(r.premium) : ''}</td><td>${num(r.total)}</td>
                   ${hasDeath ? `<td>${r.death == null ? '—' : num(r.death)}</td>` : ''}
                   ${hasSurrender ? `<td>${num(r.surrender)}</td>` : ''}
                   ${hasNote ? `<td>${UI.escape(r.note)}</td>` : ''}

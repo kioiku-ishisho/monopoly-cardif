@@ -49,7 +49,22 @@
     ring.setAttribute('aria-label', `AI 評分 ${ev.score} 分（滿分 100），等級 ${ev.grade}`);
     $('#score-grade').textContent = `${ev.grade} 級`;
     animateScore(ev.score);
-    $('#score-source').textContent = ev.source === 'claude' ? '由 Claude 評分' : '本機規則評分';
+    $('#score-source').textContent = ev.source === 'claude' ? '計分標準評分・Claude 撰寫總結' : '本機規則評分';
+
+    // 計分明細（舊版評分沒有新的項目時不顯示）
+    const parts = Object.keys(Score.MAX).filter((k) => ev.breakdown && k in ev.breakdown);
+    $('#breakdown-list').closest('section').hidden = !parts.length;
+    $('#breakdown-list').innerHTML = parts.map((k) => {
+      const v = ev.breakdown[k];
+      const max = Score.MAX[k];
+      const notes = (ev.details && ev.details[k]) || [];
+      return `
+        <li class="breakdown-item">
+          <div class="breakdown-head"><span>${Score.LABELS[k]}</span><strong>${v} <small>/ ${max}</small></strong></div>
+          <span class="breakdown-bar" aria-hidden="true"><span style="width:${Math.round((v / max) * 100)}%"></span></span>
+          ${notes.length ? `<p class="breakdown-detail">${notes.map((t) => UI.escape(t)).join('・')}</p>` : ''}
+        </li>`;
+    }).join('');
 
     // 排名（以個人最高分計算）
     if (rank) {

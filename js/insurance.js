@@ -346,6 +346,7 @@
                 env.addHistory('life', '⚠️', '繳不出保費，年金險停止繳費，已累積的金額繼續計息');
               } else {
                 end(p, 'lapsed', `繳不出保費，${p.name}停效`, '⚠️');
+                stats.lapses = (stats.lapses || 0) + 1;
               }
             }
             env.logDecision(`${Math.floor(age)} 歲現金不足繳保費，${due.map((p) => p.name).join('、')}停效或停繳`, 'insurance-lapse');

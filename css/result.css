@@ -54,6 +54,15 @@
 .rank-sub { font-weight: 700; margin: 4px 0; }
 .rank-note { color: var(--text-muted); font-size: 0.85rem; margin: 0; }
 
+.breakdown-note { margin: 0 0 12px; color: var(--text-muted); font-size: 0.9rem; }
+.breakdown-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+@media (min-width: 640px) { .breakdown-list { grid-template-columns: 1fr 1fr; column-gap: 24px; } }
+.breakdown-head { display: flex; justify-content: space-between; align-items: baseline; font-weight: 700; }
+.breakdown-head strong { font-size: 1.1rem; }
+.breakdown-head small { color: var(--text-muted); font-weight: 500; }
+.breakdown-bar { display: block; height: 8px; margin-top: 4px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+.breakdown-bar > span { display: block; height: 100%; background: var(--primary); }
+.breakdown-detail { margin: 4px 0 0; font-size: 0.8rem; color: var(--text-muted); }
 .stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 0; }
 @media (min-width: 640px) { .stat-grid { grid-template-columns: repeat(4, 1fr); } }
 .stat-grid div { padding: 12px; border-radius: var(--radius-sm); background: var(--surface-2); }

@@ -64,6 +64,12 @@
     maxPremiumRatio: 0,
     majorIllness: 0,
     interestTotal: 0,
+    medicalCost: 0, // 醫療支出合計（計分：理賠覆蓋比例）
+    lapses: 0, // 保單因繳不出保費而停效的次數（js/insurance.js 累加）
+    lapSamples: 0, // 過起點的次數
+    emergencyLaps: 0, // 過起點時現金 ≥ 3 個月生活費的次數
+    premiumRatioSum: 0, // 工作期間每圈的保費占月薪比例
+    premiumSamples: 0,
     quizAsked: 0,
     quizCorrect: 0,
     hospitalDays: 0,
@@ -80,7 +86,9 @@
   const salaryNow = () => Math.round(job.salary * state.salaryIndex);
   const expenseNow = () => Math.round(job.expense * priceIndex());
   const inflate = (n) => (n ? Math.round((n * priceIndex()) / 100) * 100 : 0);
-  const monthlyIncome = () => (incomeStopped() ? 0 : Math.round(salaryNow() * E.incomeRate[stage().id]));
+  // 退休金依退休後的物價調整（economy.pensionIndexed）
+  const pensionIndex = () => (stage().id === 'elder' && E.pensionIndexed && state.retirePrice ? priceIndex() / state.retirePrice : 1);
+  const monthlyIncome = () => (incomeStopped() ? 0 : Math.round(salaryNow() * E.incomeRate[stage().id] * pensionIndex()));
   // 不含保險的每月收支；保費與保險給付由 Ins.monthly() 另外處理
   const monthlyCashflow = () => monthlyIncome() - expenseNow() - Ins.careCost() + state.netIncomeAdj;
   const monthlyNet = () => monthlyCashflow() - Ins.monthlyPremium() + Ins.monthlyBenefit();
@@ -573,7 +581,8 @@
   function openProposal(id) {
     const prod = Insurance.PRODUCTS[id];
     const q = Ins.quote(prod);
-    const params = new URLSearchParams({ product: id, age: ageInt(), job: job.id, surcharge: q.surcharge || 1 });
+    // 傳精確年齡，建議書的首年保費才會和業務員／保險頁的報價一致
+    const params = new URLSearchParams({ product: id, age: Math.round(age() * 100) / 100, job: job.id, surcharge: q.surcharge || 1 });
     window.open(`proposal.html?${params}`, '_blank');
   }
 
@@ -901,6 +910,7 @@
       if (netIncome) parts.push(`淨收入 ${UI.fmtSigned(netIncome)}/月`);
       if (health) parts.push(`健康 ${health > 0 ? '+' : ''}${health}`);
       if (happiness) parts.push(`幸福 ${happiness > 0 ? '+' : ''}${happiness}`);
+      if (cash < 0 && (!stageStats.biggestLoss || cash < stageStats.biggestLoss.amount)) stageStats.biggestLoss = { amount: cash, reason };
       addHistory('life', icon, parts.length ? `${reason}（${parts.join('、')}）` : reason);
       renderStatus();
     },
@@ -967,24 +977,117 @@
     return n;
   }
 
+  // ===== 人生階段報告：每個階段結束與遊戲結束時，列出保險、資產配置與目前狀況 =====
+  const newStageStats = () => ({
+    startAge: ageInt(),
+    startNetWorth: netWorth(),
+    claims: stats.claims,
+    claimTotal: stats.claimTotal,
+    medicalCost: stats.medicalCost,
+    quizAsked: stats.quizAsked,
+    quizCorrect: stats.quizCorrect,
+    biggestLoss: null,
+  });
+  let stageStats = null;
+
+  const ASSET_COLORS = ['#2f9e44', '#e67700', '#7048e8', '#c2255c', '#0c8599', '#1c7ed6'];
+
+  function stageReportHtml() {
+    const b = stageStats;
+    const assets = [
+      { name: '現金', value: Math.max(0, state.cash) },
+      ...state.market.filter((m) => state.holdings[m.id]?.shares).map((m) => ({ name: m.name, value: state.holdings[m.id].shares * m.price })),
+      { name: '保單價值', value: Ins.value() },
+    ].filter((a) => a.value > 0).map((a, i) => ({ ...a, color: ASSET_COLORS[i % ASSET_COLORS.length] }));
+    const total = assets.reduce((s, a) => s + a.value, 0) || 1;
+    const policies = Ins.summary();
+    const premium = Ins.monthlyPremium();
+    const fund = state.cash / expenseNow();
+    const net = monthlyNet();
+    const claimed = stats.claimTotal - b.claimTotal;
+    const medical = stats.medicalCost - b.medicalCost;
+    const asked = stats.quizAsked - b.quizAsked;
+    const correct = stats.quizCorrect - b.quizCorrect;
+    const worthDiff = netWorth() - b.startNetWorth;
+    return `
+      <h3 class="report-h">🛡️ 保險</h3>
+      ${policies.length ? `
+        <div class="table-wrap"><table class="data-table report-table">
+          <thead><tr><th scope="col">險種</th><th scope="col">投保</th><th scope="col">月繳</th><th scope="col">狀態</th><th scope="col">已繳</th><th scope="col">已理賠</th></tr></thead>
+          <tbody>${policies.map((p) => `<tr><td>${UI.escape(p.name)}${p.legacy ? '<small>（舊保單）</small>' : ''}</td><td>${p.entryAge} 歲</td>
+            <td>${p.monthly ? UI.fmtMoney(p.monthly) : '—'}</td><td>${UI.escape(p.status)}</td><td>${UI.fmtMoney(p.paid)}</td><td>${UI.fmtMoney(p.claimed)}</td></tr>`).join('')}</tbody>
+        </table></div>` : '<p class="empty">目前沒有任何保單。</p>'}
+      <p class="report-sub">每月保費 ${UI.fmtMoney(premium)}，占月薪 ${Math.round((premium / salaryNow()) * 100)}%（建議 5–15%）</p>
+
+      <h3 class="report-h">💼 資產配置</h3>
+      <div class="asset-bar" role="img" aria-label="${assets.map((a) => `${a.name} ${Math.round((a.value / total) * 100)}%`).join('、')}">
+        ${assets.map((a) => `<span style="width:${(a.value / total) * 100}%;background:${a.color}"></span>`).join('')}
+      </div>
+      <ul class="asset-legend">${assets.map((a) => `<li><i style="background:${a.color}"></i>${UI.escape(a.name)} ${UI.fmtMoney(a.value)}（${Math.round((a.value / total) * 100)}%）</li>`).join('')}</ul>
+      <p class="report-sub">淨資產 ${UI.fmtMoney(netWorth())}，這個階段 ${UI.fmtSigned(worthDiff)}</p>
+
+      <h3 class="report-h">🩺 目前狀況</h3>
+      <dl class="report-grid">
+        <div><dt>年齡</dt><dd>${ageInt()} 歲</dd></div>
+        <div><dt>健康指數</dt><dd class="${state.health <= 30 ? 'neg' : ''}">${state.health} / 100</dd></div>
+        <div><dt>幸福指數</dt><dd class="${state.happiness <= 30 ? 'neg' : ''}">${state.happiness} / 100</dd></div>
+        <div><dt>病史</dt><dd>${state.medicalHistory.length ? state.medicalHistory.map((t) => Insurance.TAG_NAME[t]).join('、') : '無'}${state.ltc ? '、長照中' : ''}</dd></div>
+        <div><dt>每月結餘</dt><dd class="${net >= 0 ? 'pos' : 'neg'}">${UI.fmtSigned(net)}</dd></div>
+        <div><dt>緊急預備金</dt><dd class="${fund >= 3 ? 'pos' : 'neg'}">${fund > 0 ? fund.toFixed(1) : 0} 個月生活費</dd>
+          <dd class="report-hint">${fund >= 6 ? '很充足' : fund >= 3 ? '及格（建議 3–6 個月）' : '不足，遇到意外容易被迫賣股或破產'}</dd></div>
+      </dl>
+
+      <h3 class="report-h">📝 這個階段的回顧</h3>
+      <ul class="report-list">
+        <li>保險理賠 ${stats.claims - b.claims} 次，共 ${UI.fmtMoney(claimed)}${medical ? `；醫療支出 ${UI.fmtMoney(medical)}，保險負擔了 ${Math.round(Math.min(1, claimed / medical) * 100)}%` : ''}</li>
+        <li>${b.biggestLoss ? `最大一筆支出：${UI.escape(b.biggestLoss.reason)}（${UI.fmtMoney(b.biggestLoss.amount)}）` : '沒有大筆的意外支出'}</li>
+        <li>${asked ? `保險知識題答對 ${correct} / ${asked} 題` : '這個階段沒有遇到保險知識題'}</li>
+      </ul>`;
+  }
+
+  async function showStageReport(s, final = false) {
+    await UI.modal({
+      title: `📋 ${s.name}階段報告（${stageStats.startAge}–${ageInt()} 歲）`,
+      body: `<div class="stage-report">${stageReportHtml()}</div>`,
+      actions: [{ label: final ? '下一步' : '繼續人生', value: 'ok', variant: 'primary' }],
+      dismissible: false,
+      className: 'modal-wide',
+    });
+    logDecision(`${s.name}階段結束（${ageInt()} 歲）：淨資產 ${UI.fmtMoney(netWorth())}、健康 ${state.health}、幸福 ${state.happiness}、每月保費 ${UI.fmtMoney(Ins.monthlyPremium())}`, 'milestone');
+  }
+
   async function passStart() {
     state.lap++;
     Ins.onLap();
+    stats.lapSamples++;
+    if (state.cash >= expenseNow() * 3) stats.emergencyLaps++;
+    if (stage().id !== 'elder') {
+      stats.premiumRatioSum += Ins.monthlyPremium() / salaryNow();
+      stats.premiumSamples++;
+    }
     state.salaryIndex *= 1 + E.salaryGrowthPerLap;
     addHistory('life', '🧾', `物價指數 ${priceIndex().toFixed(2)}，每月生活費調整為 ${UI.fmtMoney(expenseNow())}；薪資調升 ${Math.round(E.salaryGrowthPerLap * 100)}%，月薪 ${UI.fmtMoney(salaryNow())}`);
     const decay = E.healthDecayPerLap[stage().id];
-    if (decay) {
-      state.health = clamp(state.health - decay, 0, 100);
-      addHistory('life', '⏳', `歲月流逝，健康 -${decay}`);
+    if (decay > 0) addHistory('life', '⏳', `歲月流逝，健康 -${decay}`);
+    else if (decay < 0 && state.health < 100) addHistory('life', '💪', `年輕身體恢復得快，健康 +${-decay}`);
+    state.health = clamp(state.health - decay, 0, 100);
+    const sad = E.happinessDecayPerLap[stage().id];
+    const stress = state.cash < expenseNow() * E.stress.months ? E.stress.happiness : 0;
+    if (sad + stress) {
+      state.happiness = clamp(state.happiness - sad - stress, 0, 100);
+      addHistory('life', '🌧️', `${stress ? `存款不到 ${E.stress.months} 個月生活費，經濟壓力大；` : ''}生活的消磨讓幸福 -${sad + stress}`);
     }
     addHistory('life', '🏁', `完成第 ${state.lap} 圈，${ageInt()} 歲`);
     const idx = stageIndexForLap(state.lap);
     if (idx !== state.stageIndex) {
+      await showStageReport(stage());
+      stageStats = newStageStats();
       state.stageIndex = idx;
+      if (stage().id === 'elder') state.retirePrice = priceIndex();
       buildBoard();
       const msg = {
         middle: '人生進入中年（40–65 歲）。收入提升為月薪的 1.3 倍，但家庭與健康的挑戰也變多了。',
-        elder: `你退休了！之後收入改為退休金（約月薪的 ${Math.round(E.incomeRate.elder * 100)}%），健康也會加速下降。`,
+        elder: `你退休了！之後收入改為退休金（約月薪的 ${Math.round(E.incomeRate.elder * 100)}%${E.pensionIndexed ? '，會隨物價調整' : ''}），健康也會開始下降。`,
       }[stage().id];
       addHistory('life', '🎂', `進入${stage().name}階段`);
       logDecision(`${ageInt()} 歲進入${stage().name}，淨資產 ${UI.fmtMoney(netWorth())}`, 'milestone');
@@ -1164,6 +1267,12 @@
       peakNetWorth: Math.round(stats.peakNetWorth),
       minHealth: stats.minHealth,
       avgHealth: stats.healthSamples ? Math.round(stats.healthSum / stats.healthSamples) : state.health,
+      medicalCost: Math.round(stats.medicalCost),
+      lapses: stats.lapses,
+      emergencyRate: stats.lapSamples ? Math.round((stats.emergencyLaps / stats.lapSamples) * 100) / 100 : (state.cash >= expenseNow() * 3 ? 1 : 0),
+      avgPremiumRatio: stats.premiumSamples ? Math.round((stats.premiumRatioSum / stats.premiumSamples) * 1000) / 1000 : Math.round((Ins.monthlyPremium() / salaryNow()) * 1000) / 1000,
+      quizAsked: stats.quizAsked,
+      quizCorrect: stats.quizCorrect,
       priceIndex: Math.round(priceIndex() * 100) / 100,
       finalSalary: salaryNow(),
       interestTotal: Math.round(stats.interestTotal),
@@ -1200,6 +1309,7 @@
     };
     Store.session.set('lastResult', record);
     Store.session.remove('newGame');
+    await showStageReport(stage(), true);
     await UI.modal({
       title: t.title,
       body: `<p class="pause-body" aria-hidden="true">${t.icon}</p><p>${UI.escape(record.endReasonText)}</p>
@@ -1283,6 +1393,7 @@
   announce('');
 
   state.story.schedule = buildStory();
+  stageStats = newStageStats();
 
   // 開局保單類型與初始保單（父母買的舊保單）
   async function showStartingPolicies() {
