@@ -43,6 +43,7 @@
       <span class="ticker-meta" id="ticker-meta"></span>
     </button>
     <span class="sr-only" id="market-ticker-hint">開啟市場波動紀錄</span>
+    <p class="perk-chip" id="perk-chip" role="status" hidden></p>
     <div class="board-viewport" id="board-viewport" tabindex="0" role="region"
          aria-roledescription="地圖" aria-label="大富翁地圖" aria-describedby="map-help">
       <div class="board" id="board">
@@ -51,13 +52,13 @@
         <div class="token" id="token" aria-hidden="true"></div>
       </div>
     </div>
-    <p class="sr-only" id="map-help">可拖曳移動地圖、滾輪或雙指縮放。鍵盤操作：方向鍵移動，加號與減號縮放，0 回到目前所在的圈，9 顯示全部三個人生階段。</p>
+    <p class="sr-only" id="map-help">可拖曳移動地圖、滾輪或雙指縮放。鍵盤操作：方向鍵移動，加號與減號縮放，0 或 9 顯示整圈。</p>
 
     <div class="map-controls" role="group" aria-label="地圖視角">
       <button class="icon-btn solid" type="button" id="btn-zoom-in" data-icon="plus" aria-label="放大地圖"></button>
       <button class="icon-btn solid" type="button" id="btn-zoom-out" data-icon="minus" aria-label="縮小地圖"></button>
       <button class="icon-btn solid" type="button" id="btn-zoom-me" data-icon="target" aria-label="以我的位置為中心"></button>
-      <button class="icon-btn solid" type="button" id="btn-zoom-all" data-icon="layers" aria-label="顯示全部人生階段"></button>
+      <button class="icon-btn solid" type="button" id="btn-zoom-all" data-icon="layers" aria-label="顯示整圈"></button>
     </div>
 
     <div class="dice-area">
@@ -139,6 +140,7 @@
   <script src="js/ui.js"></script>
   <script src="js/api.js"></script>
   <script src="js/insurance.js"></script>
+  <script src="js/quiz.js"></script>
   <script src="js/events.js"></script>
   <script src="js/world.js"></script>
   <script src="js/game.js"></script>

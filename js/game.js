@@ -27,6 +27,9 @@
     premiumArrears: 0, // 保費欠繳月數（寬限期）
     incomeStopUntil: 0, // 生病停薪到第幾步（退休金不受影響）
     lastTag: null, // 本回合最後一個事件的疾病標籤 { tag, turn }，判斷意外身故
+    skipTurns: 0, // 住院：剩下幾回合暫停移動
+    policyPerks: { discount: null, surcharge: 0 }, // 特殊格給的下次投保優惠 { rate, cap } 與加價
+    quizUsed: [], // 本局答過的題目 id
     gameId: null, // 伺服器端的遊戲 id，用來抽牌
     holdings: {}, // { 股票id: { shares, cost } }
     market: D.stocks.map((s) => ({ ...s, prev: s.price, history: [s.price] })),
@@ -54,6 +57,9 @@
     firstInsuredAge: null,
     maxPremiumRatio: 0,
     majorIllness: 0,
+    quizAsked: 0,
+    quizCorrect: 0,
+    hospitalDays: 0,
   };
 
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -101,20 +107,16 @@
     $('#dice-result').textContent = msg;
   }
 
-  // ===== 地圖：三個人生階段的圈放在同一張大地圖 =====
-  const STAGE_IDS = D.stages.map((s) => s.id);
-  const WORLD = GameWorld.build(STAGE_IDS, E.tilesPerLap);
+  // ===== 地圖：三個人生階段共用一圈 =====
+  const WORLD = GameWorld.build(E.tilesPerLap);
   const loopsEl = $('#loops');
   const roadsEl = $('#roads');
   const token = $('#token');
 
-  function boardTiles(stageId = stage().id) {
-    return D.boards[stageId].map((type, i) => ({ index: i, type, ...D.tileTypes[type] }));
-  }
-  const currentTile = () => boardTiles()[state.position];
-  const activeLoopEl = () => loopsEl.querySelector(`.loop[data-stage="${stage().id}"]`);
+  const TILES = D.board.map((type, i) => ({ index: i, type, ...D.tileTypes[type] }));
+  const currentTile = () => TILES[state.position];
 
-  // 只建立一次：道路（SVG）、各圈的格子與標籤
+  // 只建立一次：道路（SVG）與格子
   function buildWorld() {
     const boardEl = $('#board');
     boardEl.style.width = WORLD.width + 'px';
@@ -122,65 +124,54 @@
     roadsEl.setAttribute('viewBox', `0 0 ${WORLD.width} ${WORLD.height}`);
     roadsEl.setAttribute('width', WORLD.width);
     roadsEl.setAttribute('height', WORLD.height);
-    roadsEl.innerHTML = [
-      ...WORLD.bridges.map((b) => `
-        <path class="bridge" d="${b.d}"/>
-        <text class="bridge-label" x="${b.mid.x}" y="${b.mid.y}">${D.stages.find((s) => s.id === b.to).ageFrom} 歲 →</text>`),
-      ...STAGE_IDS.map((id) => `
-        <g class="road" data-stage="${id}">
-          <path class="road-edge" d="${WORLD.loops[id].path}"/>
-          <path class="road-bed" d="${WORLD.loops[id].path}"/>
-          <path class="road-line" d="${WORLD.loops[id].path}"/>
-        </g>`),
-    ].join('');
+    roadsEl.innerHTML = `
+      <g class="road">
+        <path class="road-edge" d="${WORLD.path}"/>
+        <path class="road-bed" d="${WORLD.path}"/>
+        <path class="road-line" d="${WORLD.path}"/>
+      </g>`;
 
-    loopsEl.innerHTML = D.stages.map((s) => {
-      const loop = WORLD.loops[s.id];
-      const counts = D.boardCounts[s.id];
-      return `
-        <section class="loop" data-stage="${s.id}" aria-label="${s.name}圈">
-          <div class="loop-label" style="left:${loop.center.x}px;top:${loop.center.y}px" aria-hidden="true">
-            <div class="loop-name">${s.name}</div>
-            <div class="loop-ages">${s.ageFrom}${s.ageTo ? `–${s.ageTo} 歲` : ' 歲以上'}</div>
-            <div class="loop-status" data-status="${s.id}"></div>
-            <div class="loop-legend">${['chance', 'fate', 'insurance', 'rest'].map((t) =>
-              `<span>${D.tileTypes[t].icon} ${counts[t]}</span>`).join('')}</div>
-          </div>
-          <ol class="tiles" aria-label="${s.name}圈的格子">
-            ${boardTiles(s.id).map((t) => {
-              const p = loop.points[t.index];
-              const rot = ((t.index * 37) % 13) - 6; // 固定的小角度傾斜（-6°～6°）
-              return `<li class="tile${t.index === 0 ? ' start' : ''}" data-type="${t.type}" data-index="${t.index}"
-                        style="left:${p.x.toFixed(1)}px;top:${p.y.toFixed(1)}px;--rot:${rot}deg">
-                <span class="tile-no" aria-hidden="true">${t.index + 1}</span>
-                <span class="tile-icon" aria-hidden="true">${t.icon}</span>
-                <span class="tile-name">${UI.escape(t.name)}</span>
-              </li>`;
-            }).join('')}
-          </ol>
-        </section>`;
-    }).join('');
+    const counts = D.boardCounts;
+    const legend = [['chance', counts.chance], ['fate', counts.fate], ['insurance', counts.insurance], ['hospital', counts.hospital]]
+      .map(([t, n]) => `<span>${D.tileTypes[t].icon} ${n}</span>`).join('') + `<span>⭐ ${counts.special}</span>`;
+    loopsEl.innerHTML = `
+      <section class="loop" aria-label="人生圈">
+        <div class="loop-label" style="left:${WORLD.center.x}px;top:${WORLD.center.y}px" aria-hidden="true">
+          <div class="loop-name" id="loop-name"></div>
+          <div class="loop-ages" id="loop-ages"></div>
+          <div class="loop-status" id="loop-status"></div>
+          <div class="loop-legend">${legend}</div>
+        </div>
+        <ol class="tiles" aria-label="人生圈的格子">
+          ${TILES.map((t) => {
+            const p = WORLD.points[t.index];
+            const rot = ((t.index * 37) % 13) - 6; // 固定的小角度傾斜（-6°～6°）
+            return `<li class="tile${t.index === 0 ? ' start' : ''}" data-type="${t.type}"${t.group ? ` data-group="${t.group}"` : ''} data-index="${t.index}"
+                      style="left:${p.x.toFixed(1)}px;top:${p.y.toFixed(1)}px;--rot:${rot}deg">
+              <span class="tile-no" aria-hidden="true">${t.index + 1}</span>
+              <span class="tile-icon" aria-hidden="true">${t.icon}</span>
+              <span class="tile-name">${UI.escape(t.name)}</span>
+            </li>`;
+          }).join('')}
+        </ol>
+      </section>`;
     token.textContent = job.icon;
     token.style.setProperty('--job-color', job.color);
   }
 
-  // 標示目前所在的圈；其他圈變淡，且不讓螢幕閱讀器讀到
+  // 圈的顏色與中央標籤跟著目前的人生階段
   function buildBoard() {
     if (!loopsEl.children.length) buildWorld();
     document.body.dataset.stage = stage().id;
-    loopsEl.querySelectorAll('.loop').forEach((el) => {
-      const idx = STAGE_IDS.indexOf(el.dataset.stage);
-      const st = idx === state.stageIndex ? 'active' : idx < state.stageIndex ? 'done' : 'upcoming';
-      el.dataset.state = st;
-      el.toggleAttribute('aria-hidden', st !== 'active');
-      roadsEl.querySelector(`.road[data-stage="${el.dataset.stage}"]`).dataset.state = st;
-    });
+    const s = stage();
+    $('#loop-name').textContent = s.name;
+    $('#loop-ages').textContent = `${s.ageFrom}${s.ageTo ? `–${s.ageTo} 歲` : ' 歲以上'}`;
     placeToken(false);
     renderStatus();
   }
 
   function tokenCenter() {
-    return WORLD.loops[stage().id].points[state.position];
+    return WORLD.points[state.position];
   }
 
   function placeToken(hop) {
@@ -191,7 +182,7 @@
       t.classList.remove('current');
       t.removeAttribute('aria-current');
     });
-    const cur = activeLoopEl()?.querySelector(`[data-index="${state.position}"]`);
+    const cur = loopsEl.querySelector(`[data-index="${state.position}"]`);
     if (cur) {
       cur.classList.add('current');
       cur.setAttribute('aria-current', 'location');
@@ -234,7 +225,7 @@
     applyView(animate);
   }
 
-  const fitBoard = (animate) => fitRect(WORLD.loops[stage().id].bbox, animate, true);
+  const fitBoard = (animate) => fitRect(WORLD.bbox, animate, true);
   const fitWorld = (animate) => fitRect(WORLD.bbox, animate, false);
 
   function zoomAt(factor, cx, cy) {
@@ -341,6 +332,15 @@
   window.addEventListener('resize', () => { if (!userMoved) fitBoard(false); });
 
   // ===== 狀態顯示 =====
+  // 下一次投保的優惠／加價（特殊格造成）
+  function perkText() {
+    const { discount, surcharge } = state.policyPerks;
+    const parts = [];
+    if (discount) parts.push(`🏷️ 下次投保首年保費折抵 ${Math.round(discount.rate * 100)}%（上限 ${UI.fmtMoney(discount.cap)}）`);
+    if (surcharge) parts.push(`⌛ 下次投保加付 ${UI.fmtMoney(surcharge)}`);
+    return parts.join('・');
+  }
+
   function renderStatus() {
     $('#stage-chip').textContent = `${stage().name}・${ageInt()} 歲`;
     $('#sum-cash').textContent = UI.fmtMoney(state.cash);
@@ -350,13 +350,12 @@
     meter.querySelector('span').style.width = state.health + '%';
     meter.classList.toggle('warn', state.health <= 50 && state.health > 25);
     meter.classList.toggle('danger', state.health <= 25);
-    loopsEl.querySelectorAll('[data-status]').forEach((el) => {
-      const idx = STAGE_IDS.indexOf(el.dataset.status);
-      // 圈數以「這個階段的第幾圈」顯示
-      const lapsBefore = D.stages.slice(0, state.stageIndex).reduce((sum, s) => sum + s.laps, 0);
-      el.textContent = idx === state.stageIndex ? `目前 ${ageInt()} 歲・第 ${state.lap - lapsBefore + 1} 圈`
-        : idx < state.stageIndex ? '已走完 ✓' : '尚未開始';
-    });
+    // 圈數以「這個階段的第幾圈」顯示
+    const lapsBefore = D.stages.slice(0, state.stageIndex).reduce((sum, s) => sum + s.laps, 0);
+    const lapsTotal = stage().laps === Infinity ? '' : ` / ${stage().laps}`;
+    $('#loop-status').textContent = `目前 ${ageInt()} 歲・第 ${state.lap - lapsBefore + 1}${lapsTotal} 圈`;
+    $('#perk-chip').hidden = !perkText();
+    $('#perk-chip').textContent = perkText();
     if ($('#sheet').classList.contains('open')) renderSheet();
   }
 
@@ -405,7 +404,7 @@
         <div><dt>股票市值</dt><dd>${UI.fmtMoney(stockValue())}</dd></div>
         <div><dt>保單價值</dt><dd>${UI.fmtMoney(Ins.value())}</dd>
           <dd class="info-sub">投資型保險與年金險帳戶</dd></div>
-        <div><dt>股市截至目前淨利</dt><dd class="${stockProfit >= 0 ? 'pos' : 'neg'}">${UI.fmtSigned(stockProfit)}</dd>
+        <div><dt>股市截至目前淨利</dt><dd class="${stockProfit >= 0 ? 'up' : 'down'}">${UI.fmtSigned(stockProfit)}</dd>
           <dd class="info-sub">已實現 ${UI.fmtSigned(stats.realizedPnL)}・未實現 ${UI.fmtSigned(unrealized)}</dd></div>
         <div><dt>淨資產</dt><dd>${UI.fmtMoney(netWorth())}</dd></div>
         <div><dt>健康指數</dt><dd>${state.health} / 100</dd>
@@ -422,7 +421,7 @@
             const h = state.holdings[s.id];
             const value = h.shares * s.price;
             const pnl = value - h.cost;
-            return `<tr><td>${UI.escape(s.name)}</td><td>${h.shares.toLocaleString('zh-TW')}</td><td>${s.price.toFixed(2)}</td><td>${UI.fmtMoney(value)}</td><td class="${pnl >= 0 ? 'pos' : 'neg'}">${UI.fmtSigned(pnl)}</td></tr>`;
+            return `<tr><td>${UI.escape(s.name)}</td><td>${h.shares.toLocaleString('zh-TW')}</td><td>${s.price.toFixed(2)}</td><td>${UI.fmtMoney(value)}</td><td class="${pnl >= 0 ? 'up' : 'down'}">${UI.fmtSigned(pnl)}</td></tr>`;
           }).join('')}</tbody>
         </table></div>` : '<p class="empty">目前沒有持股，可以從右上角「股票」開始投資。</p>'}
       <h3>保單</h3>
@@ -430,7 +429,7 @@
   }
 
   function policyTable() {
-    if (!state.policies.length) return '<p class="empty">目前沒有保單，踩到「保險」格時可以投保。</p>';
+    if (!state.policies.length) return '<p class="empty">目前沒有保單，踩到「保險業務員」格時可以投保。</p>';
     return `
       <div class="table-wrap"><table class="data-table policy-table">
         <thead><tr><th scope="col">險種</th><th scope="col">投保</th><th scope="col">狀態</th><th scope="col">月繳</th><th scope="col">已繳</th><th scope="col">已領給付</th><th scope="col">保單價值</th><th scope="col"><span class="sr-only">操作</span></th></tr></thead>
@@ -533,7 +532,7 @@
       $('#policy-body').innerHTML = `
         <h3 class="policy-h">通用規則</h3>
         <ul class="rule-list">
-          <li>踩到「保險」格時，業務員會隨機介紹 ${cfg.offerCount} 種險種，可以選擇投保或略過。</li>
+          <li>踩到「保險業務員」格時，業務員會隨機介紹 ${cfg.offerCount} 種險種，可以選擇投保或略過。</li>
           <li>保費與生活費一起每月扣款；現金不足時有 ${cfg.graceMonths} 個月寬限期，之後仍繳不出就停效。</li>
           <li>雙十原則：保費總額建議不超過月薪的 ${Math.round(cfg.budgetRate * 100)}%。</li>
           <li>健康降到 ${cfg.ltc.health} 以下會進入長照狀態，之後每月多 ${UI.fmtMoney(cfg.ltc.careCost)} 照護費。</li>
@@ -602,7 +601,7 @@
       <div class="stock-summary">
         <span>現金 ${UI.fmtMoney(state.cash)}</span>
         <span>股票市值 ${UI.fmtMoney(value)}</span>
-        <span class="${value - cost >= 0 ? 'pos' : 'neg'}">未實現損益 ${UI.fmtSigned(value - cost)}</span>
+        <span class="${value - cost >= 0 ? 'up' : 'down'}">未實現損益 ${UI.fmtSigned(value - cost)}</span>
       </div>
       <div class="stock-cards">
         ${state.market.map((s) => {
@@ -614,12 +613,12 @@
           return `
           <article class="stock-card" aria-labelledby="name-${s.id}">
             <div class="stock-name" id="name-${s.id}">${UI.escape(s.name)}<small>${s.id}</small></div>
-            <div class="s-price">${s.price.toFixed(2)}<small class="${chg >= 0 ? 'pos' : 'neg'}">${chg >= 0 ? '▲' : '▼'} ${UI.fmtPct(chg)}</small></div>
+            <div class="s-price">${s.price.toFixed(2)}<small class="${chg >= 0 ? 'up' : 'down'}">${chg >= 0 ? '▲' : '▼'} ${UI.fmtPct(chg)}</small></div>
             ${sparkline(s.history)}
             <div class="s-hold">持有 ${h.shares.toLocaleString('zh-TW')} 股${h.shares ? `・市值 ${UI.fmtMoney(mv)}` : ''}</div>
             ${h.shares ? `<div class="s-pnl">
               <span>買進均價 ${(h.cost / h.shares).toFixed(2)}</span>
-              <span class="${pnl >= 0 ? 'pos' : 'neg'}">損益 ${UI.fmtSigned(pnl)}（${UI.fmtPct(pnl / h.cost)}）</span>
+              <span class="${pnl >= 0 ? 'up' : 'down'}">損益 ${UI.fmtSigned(pnl)}（${UI.fmtPct(pnl / h.cost)}）</span>
             </div>` : ''}
             <div class="s-trade">
               <label class="sr-only" for="${inputId}">${UI.escape(s.name)} 交易股數</label>
@@ -763,6 +762,17 @@
     stats,
     alert: (opts) => UI.alert(opts),
     logDecision,
+    renderStatus: () => renderStatus(),
+    addHistory,
+    // 擲一次骰子（住院天數等），回傳 1–6
+    rollDice: () => rollDice(),
+    // 貴人相助：往前走 n 格（照常過月份），再執行停留格的事件
+    async moveForward(n) {
+      for (let i = 0; i < n; i++) await stepOnce(stepDelay());
+      ensureTokenVisible();
+      announce(`前進 ${n} 格，來到「${currentTile().name}」`);
+      await runTile(currentTile());
+    },
   };
 
   // ===== 回合流程 =====
@@ -803,47 +813,72 @@
     if (idx !== state.stageIndex) {
       state.stageIndex = idx;
       buildBoard();
-      userMoved = false;
-      fitBoard(true); // 鏡頭移到新的一圈
       const msg = {
         middle: '人生進入中年（40–65 歲）。收入提升為月薪的 1.3 倍，但家庭與健康的挑戰也變多了。',
         elder: `你退休了！之後收入改為退休金（約月薪的 ${Math.round(E.incomeRate.elder * 100)}%），健康也會加速下降。`,
       }[stage().id];
       addHistory('life', '🎂', `進入${stage().name}階段`);
       logDecision(`${ageInt()} 歲進入${stage().name}，淨資產 ${UI.fmtMoney(netWorth())}`, 'milestone');
-      await UI.alert({ title: `進入${stage().name}圈`, message: msg, okText: '繼續' });
+      await UI.alert({ title: `進入${stage().name}階段`, message: msg, okText: '繼續' });
     }
+  }
+
+  // 前進一格 = 過一個月：領薪、扣生活費與保費，經過起點時換圈
+  async function stepOnce(delay) {
+    await waitIfPaused();
+    state.position = (state.position + 1) % E.tilesPerLap;
+    state.steps++;
+    state.cash += monthlyCashflow() * E.monthsPerStep;
+    Ins.monthly();
+    if (state.position === 0) await passStart();
+    placeToken(true);
+    renderStatus();
+    await UI.wait(delay);
+  }
+
+  const stepDelay = () => (UI.reducedMotion() ? 60 : 220);
+
+  async function runTile(tile) {
+    await waitIfPaused();
+    await (TileEvents[tile.type] || TileEvents.default)(tile, ctx);
+  }
+
+  // 住院中：這回合不移動，仍過一個月（沒有薪水，退休金照領）
+  async function hospitalTurn() {
+    state.skipTurns--;
+    const before = state.cash;
+    state.steps++;
+    const lost = stage().id === 'elder' ? 0 : monthlyIncome();
+    state.cash += (monthlyCashflow() - lost) * E.monthsPerStep;
+    Ins.monthly();
+    addHistory('life', '🛏️', `住院休養，暫停移動 1 回合${lost ? `，少領 1 個月薪水（${UI.fmtMoney(lost)}）` : ''}`);
+    renderStatus();
+    announce(`住院休養中，暫停移動・1 個月收支 ${UI.fmtSigned(state.cash - before)}`);
+    marketTick(E.monthsPerStep);
+    await UI.alert({ title: '🛏️ 住院休養中', message: `這回合暫停移動。${lost ? '無法上班，這個月沒有薪水。' : '退休金照常入帳。'}`, okText: '繼續' });
+    return E.monthsPerStep;
+  }
+
+  async function moveTurn() {
+    const n = await rollDice();
+    announce(`擲出 ${n} 點`);
+    const before = state.cash;
+    for (let i = 0; i < n; i++) await stepOnce(stepDelay());
+    ensureTokenVisible();
+    const tile = currentTile();
+    announce(`擲出 ${n} 點，來到「${tile.name}」・${n * E.monthsPerStep} 個月收支 ${UI.fmtSigned(state.cash - before)}`);
+    marketTick(n * E.monthsPerStep);
+    await runTile(tile);
+    return n * E.monthsPerStep;
   }
 
   async function turn() {
     if (state.busy || state.over || state.paused) return;
     state.busy = true;
     setDiceEnabled(false);
-    const n = await rollDice();
     state.turn++;
-    announce(`擲出 ${n} 點`);
-    const before = state.cash;
-    const stepDelay = UI.reducedMotion() ? 60 : 220;
-
-    for (let i = 0; i < n; i++) {
-      await waitIfPaused();
-      state.position = (state.position + 1) % E.tilesPerLap;
-      state.steps++;
-      state.cash += monthlyCashflow() * E.monthsPerStep;
-      Ins.monthly();
-      if (state.position === 0) await passStart();
-      placeToken(true);
-      renderStatus();
-      await UI.wait(stepDelay);
-    }
-    ensureTokenVisible();
-
-    const tile = currentTile();
-    announce(`擲出 ${n} 點，來到「${tile.name}」・${n * E.monthsPerStep} 個月收支 ${UI.fmtSigned(state.cash - before)}`);
-    marketTick(n * E.monthsPerStep);
-    await waitIfPaused();
-    await (TileEvents[tile.type] || TileEvents.default)(tile, ctx);
-    await maybeMajorIllness(n * E.monthsPerStep);
+    const months = state.skipTurns > 0 ? await hospitalTurn() : await moveTurn();
+    await maybeMajorIllness(months);
     await checkLtc();
 
     stats.peakNetWorth = Math.max(stats.peakNetWorth, netWorth());
@@ -855,6 +890,7 @@
     if (await checkEnd()) return;
     state.busy = false;
     setDiceEnabled(true);
+    diceBtn.querySelector('.dice-label').textContent = state.skipTurns > 0 ? '住院休養' : '擲骰子';
   }
 
   // 重大疾病：每回合依年齡與健康擲一次（命運牌裡的大病很少，補上才能體會重大傷病、癌症險的價值）

@@ -120,9 +120,27 @@
       const extra = q.surcharge > 1 ? `（健康加費 ${Math.round((q.surcharge - 1) * 100)}%）` : '';
       env.addHistory('life', '🛡️', `投保${prod.name}，月繳 ${fmt(p.monthly)}${extra}`);
       env.logDecision(`${p.entryAge} 歲投保${prod.name}，月繳 ${fmt(p.monthly)}${extra}`, 'insurance');
+      applyPerks(p);
       const total = monthlyPremium();
       stats.maxPremiumRatio = Math.max(stats.maxPremiumRatio || 0, total / job.salary);
       return { policy: p, overBudget: total > job.salary * CFG.budgetRate, total };
+    }
+
+    // 特殊格給的下次投保優惠（首年保費折抵）與加價，在投保時一次結算
+    function applyPerks(p) {
+      const { discount, surcharge } = state.policyPerks;
+      if (discount) {
+        const refund = Math.min(discount.cap, Math.round(p.monthly * 12 * discount.rate));
+        state.cash += refund;
+        env.addHistory('life', '🏷️', `${p.name}首年保費折抵 ${Math.round(discount.rate * 100)}%，退回 ${fmt(refund)}`);
+        env.toast(`🏷️ 保險優惠：退回 ${fmt(refund)}`);
+      }
+      if (surcharge) {
+        state.cash -= surcharge;
+        env.addHistory('life', '⌛', `錯過優惠，投保${p.name}加付 ${fmt(surcharge)}`);
+        env.toast(`⌛ 錯過優惠：加付 ${fmt(surcharge)}`);
+      }
+      state.policyPerks = { discount: null, surcharge: 0 };
     }
 
     // ===== 每月：保費、給付、年金累積 =====

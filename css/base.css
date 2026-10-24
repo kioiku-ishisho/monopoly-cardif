@@ -326,6 +326,11 @@ dialog.modal::backdrop { background: rgba(0, 20, 10, 0.55); backdrop-filter: blu
 .empty { color: var(--text-muted); text-align: center; padding: 24px 0; }
 .pos { color: var(--accent); }
 .neg { color: var(--danger); }
+/* 股票漲跌顏色：預設台股紅漲綠跌，設定可改為美股綠漲紅跌（<html data-stock="us">） */
+:root { --stock-up: var(--danger); --stock-down: var(--accent); }
+:root[data-stock="us"] { --stock-up: var(--accent); --stock-down: var(--danger); }
+.up { color: var(--stock-up); }
+.down { color: var(--stock-down); }
 
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
 .field label, .field legend { font-weight: 700; }

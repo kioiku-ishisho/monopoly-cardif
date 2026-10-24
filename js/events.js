@@ -3,15 +3,18 @@
  *   機會：從資料庫抽一張本局未抽過的機會牌，玩家選擇接受或放棄
  *   命運：從資料庫抽一張本局未抽過的命運牌，抽到即發生；依疾病標籤（js/data.js 的 cardTags）理賠
  *   保險：業務員隨機介紹 3 種險種（js/data.js 的 insurance、js/insurance.js）
+ *   住院：擲骰決定住院天數、支付醫療費並理賠，之後暫停移動 1 回合
+ *   特殊格：保單健檢、理財講座、觀念挑戰、貴人相助、保險優惠、保單整理日、錯過優惠（數值在 js/data.js 的 specialTiles）
  *   休息：什麼事都沒發生
  *
  * handler 為 async (tile, ctx) => void，ctx 由 js/game.js 提供：
  *   ctx.state / ctx.stats / ctx.job / ctx.age() / ctx.stageId() / ctx.gameId()
  *   ctx.applyEffects({ cash, netIncome, health }, 原因, 圖示)
  *   ctx.insurance（Insurance.create 的結果）/ ctx.stopIncome(月數) / ctx.logDecision(文字, 分類) / ctx.alert(opts)
+ *   ctx.rollDice() / ctx.moveForward(格數) / ctx.renderStatus() / ctx.addHistory(kind, icon, text)
  */
 (function () {
-  const KIND_LABEL = { chance: '機會', fate: '命運' };
+  const KIND_LABEL = { chance: '機會', fate: '命運', hospital: '住院' };
 
   function effectItems({ cash, netIncome, health }) {
     const items = [];
@@ -123,7 +126,7 @@
   }
 
   // 命運事件：依疾病標籤理賠，再套用影響
-  async function resolveFate(card, ctx, { title, tag }) {
+  async function resolveFate(card, ctx, { title, tag, reason = `命運：${card.text}` }) {
     const cost = card.cash < 0 ? -card.cash : 0;
     const result = ctx.insurance.claim({ tag, cost });
     const extra = [];
@@ -144,7 +147,7 @@
       actions: [{ label: '確定', value: 'ok', variant: 'primary' }],
       dismissible: false,
     });
-    ctx.applyEffects({ ...card, cash: card.cash + result.total }, `命運：${card.text}`, card.id === '重大疾病' ? '🚑' : '🎴');
+    ctx.applyEffects({ ...card, cash: card.cash + result.total }, reason, { 重大疾病: '🚑', 住院: '🏥' }[card.id] || '🎴');
     if (card.stopMonths) ctx.stopIncome(card.stopMonths);
     if (tag) ctx.state.lastTag = { tag, turn: ctx.state.turn };
     if (result.total) {
@@ -228,6 +231,7 @@
       const res = ins.buy(prod.id, amount);
       if (!res) continue;
       bought++;
+      ctx.renderStatus();
       UI.toast(`🛡️ 已投保${prod.name}`);
       if (res.overBudget) UI.toast(`⚠️ 保費總額 ${UI.fmtMoney(res.total)}，已超過月薪的 ${Math.round(GameData.insurance.budgetRate * 100)}%`);
       offers = offers.filter((p) => p.id !== prod.id);
@@ -239,11 +243,218 @@
     UI.toast('☕ 休息一下，什麼事都沒發生');
   }
 
+  // ===== 住院 =====
+  async function hospital(tile, ctx) {
+    const cfg = GameData.hospital;
+    await UI.alert({
+      title: '🏥 住院',
+      message: '你因突發疾病需要住院治療，暫時無法正常工作。擲骰子決定住院天數。',
+      okText: '擲骰子',
+      dismissible: false,
+    });
+    const pip = await ctx.rollDice();
+    const days = pip * cfg.daysPerPip;
+    const cost = days * cfg.costPerDay;
+    ctx.stats.hospitalDays += days;
+    const card = {
+      kind: 'hospital', id: '住院', cash: -cost, netIncome: 0, health: 0,
+      text: `擲出 ${pip} 點，住院 ${days} 天，醫療費 ${UI.fmtMoney(cost)}。出院後要休養，下回合暫停移動。`,
+    };
+    await resolveFate(card, ctx, { title: '🏥 住院', tag: 'hospital', reason: `住院 ${days} 天` });
+    ctx.state.skipTurns = cfg.skipTurns;
+  }
+
+  // ===== 保險知識題（小學堂）=====
+  // 回傳 { correct, timeout, question }
+  async function askQuiz(ctx, { title, intro, preferMyth = false }) {
+    const q = Quiz.pick(ctx.state.quizUsed, preferMyth);
+    ctx.state.quizUsed.push(q.id);
+    const seconds = GameData.specialTiles.quizSeconds;
+    const body = document.createElement('div');
+    body.innerHTML = `
+      <div class="event-card quiz-card" data-kind="special">
+        <p class="card-text">${UI.escape(intro)}</p>
+        <p class="quiz-q">${UI.escape(q.q)}</p>
+        <p class="quiz-timer"><span class="quiz-bar" aria-hidden="true"><span></span></span><span><span class="quiz-sec">${seconds}</span> 秒</span></p>
+      </div>`;
+    const bar = body.querySelector('.quiz-bar > span');
+    const sec = body.querySelector('.quiz-sec');
+    let left = seconds;
+    const timer = setInterval(() => {
+      left--;
+      sec.textContent = left;
+      bar.style.width = `${(left / seconds) * 100}%`;
+      if (left <= 0) body.closest('dialog')?.close('timeout');
+    }, 1000);
+    // 選項順序每次打亂；按鈕的 value 仍是題庫裡的原始索引
+    const order = q.options.map((_, i) => i).sort(() => Math.random() - 0.5);
+    const letters = ['A', 'B', 'C', 'D'];
+    const choice = await UI.modal({
+      title,
+      body,
+      actions: order.map((i, k) => ({ label: `${letters[k]}. ${q.options[i]}`, value: String(i), variant: 'ghost' })),
+      dismissible: false,
+      className: 'modal-quiz',
+    });
+    clearInterval(timer);
+    const timeout = choice === 'timeout';
+    const correct = !timeout && Number(choice) === q.answer;
+    ctx.stats.quizAsked++;
+    if (correct) ctx.stats.quizCorrect++;
+    const verdict = correct ? '答對' : timeout ? '超時未答' : `答錯（選了「${q.options[Number(choice)]}」）`;
+    ctx.logDecision(`保險知識題「${q.q}」${verdict}`, correct ? 'quiz-correct' : 'quiz-wrong');
+    return { correct, timeout, question: q };
+  }
+
+  function quizResultHtml({ correct, timeout, question }, rewardHtml) {
+    const head = correct ? '⭕ 答對了！' : timeout ? '⏰ 時間到！' : '❌ 答錯了';
+    return `
+      <div class="event-card" data-kind="special">
+        <p class="quiz-result ${correct ? 'pos' : 'neg'}">${head}</p>
+        <p>正確答案：<strong>${UI.escape(question.options[question.answer])}</strong></p>
+        <p class="card-note">${UI.escape(question.explain)}</p>
+        ${rewardHtml}
+      </div>`;
+  }
+
+  // ===== 特殊格 =====
+  const SP = () => GameData.specialTiles;
+  const pct = (rate) => `${Math.round(rate * 100)}%`;
+
+  function specialHtml(text, items, note = '') {
+    return `
+      <div class="event-card" data-kind="special">
+        <p class="card-text">${UI.escape(text)}</p>
+        <ul class="effect-list">${items.map((t) => `<li>${UI.escape(t)}</li>`).join('')}</ul>
+        ${note ? `<p class="card-note">${UI.escape(note)}</p>` : ''}
+      </div>`;
+  }
+
+  // 下次投保優惠；已有優惠時保留折抵較多的那一個
+  function grantDiscount(ctx, discount, reason) {
+    const perks = ctx.state.policyPerks;
+    const worth = (d) => (d ? d.rate * 1e6 + d.cap : 0);
+    if (worth(discount) > worth(perks.discount)) perks.discount = { rate: discount.rate, cap: discount.cap };
+    ctx.addHistory('life', '🏷️', `${reason}：下次投保首年保費折抵 ${pct(discount.rate)}（上限 ${UI.fmtMoney(discount.cap)}）`);
+    ctx.renderStatus();
+  }
+
+  // 1. 保單健檢機會：答對可選現金或保費優惠
+  async function checkup(tile, ctx) {
+    const cfg = SP().checkup;
+    const title = '🩺 保單健檢機會';
+    const res = await askQuiz(ctx, { title, intro: '你參加了一場免費的保險健檢活動，重新了解自己目前的保障內容。答對保險知識題可以獲得獎勵！' });
+    if (!res.correct) {
+      await UI.alert({ title, html: quizResultHtml(res, '<p>這次沒有獲得獎勵，下次再加油。</p>'), dismissible: false });
+      return;
+    }
+    const reward = await UI.modal({
+      title,
+      body: quizResultHtml(res, '<p>請選擇一項獎勵：</p>'),
+      actions: [
+        { label: `🏷️ 下次投保首年保費折抵 ${pct(cfg.coupon.rate)}（上限 ${UI.fmtMoney(cfg.coupon.cap)}）`, value: 'coupon', variant: 'ghost' },
+        { label: `💰 現金 ${UI.fmtSigned(cfg.cash)}`, value: 'cash', variant: 'primary' },
+      ],
+      dismissible: false,
+    });
+    if (reward === 'coupon') {
+      grantDiscount(ctx, cfg.coupon, '保單健檢優惠');
+      ctx.logDecision('保單健檢答對，選擇保費優惠', 'special');
+    } else {
+      ctx.applyEffects({ cash: cfg.cash }, '保單健檢答對獎勵', '🩺');
+      ctx.logDecision(`保單健檢答對，選擇現金 ${UI.fmtMoney(cfg.cash)}`, 'special');
+    }
+  }
+
+  // 2. 財務規劃講座：小額現金 + 一則理財小知識
+  async function seminar(tile, ctx) {
+    const cfg = SP().seminar;
+    const tip = GameData.tips[Math.floor(Math.random() * GameData.tips.length)];
+    await UI.alert({
+      title: '🎓 財務規劃講座',
+      html: specialHtml('你參加了一場理財講座，學會區分緊急預備金、儲蓄與保險的功能。',
+        [`💰 現金 ${UI.fmtSigned(cfg.cash)}`], `💡 ${tip.title}：${tip.text}`),
+      dismissible: false,
+    });
+    ctx.applyEffects({ cash: cfg.cash }, '參加財務規劃講座', '🎓');
+  }
+
+  // 3. 保障觀念挑戰：答對加現金，答錯買到不符合需求的保單
+  async function myth(tile, ctx) {
+    const cfg = SP().myth;
+    const title = '🧐 保障觀念挑戰';
+    const res = await askQuiz(ctx, { title, intro: '你看到一則宣稱「買了保險，所有醫療費用都能理賠」的廣告。先想想看：', preferMyth: true });
+    const cash = res.correct ? cfg.win : cfg.lose;
+    const msg = res.correct
+      ? `<ul class="effect-list"><li>💰 現金 ${UI.fmtSigned(cash)}</li></ul>`
+      : `<p class="card-note warn">你被廣告說服，買到不符合需求的保單。</p><ul class="effect-list"><li>💸 現金 ${UI.fmtSigned(cash)}</li></ul>`;
+    await UI.alert({ title, html: quizResultHtml(res, msg), dismissible: false });
+    ctx.applyEffects({ cash }, res.correct ? '識破保險廣告迷思' : '買到不符合需求的保單', '🧐');
+  }
+
+  // 4. 貴人相助：前進 3 格（照常過月份），停留格的事件照常執行
+  async function mentor(tile, ctx) {
+    const n = SP().mentor.steps;
+    await UI.alert({
+      title: '🤝 貴人相助',
+      html: specialHtml('你在一次聚會中，認識了一位熱心的保險從業人員，對方提醒你：購買保險前應先確認自己的需求與保障內容。',
+        [`👣 向前移動 ${n} 格`], '停留的格子有事件時，依該格規則執行。'),
+      okText: `前進 ${n} 格`,
+      dismissible: false,
+    });
+    ctx.addHistory('life', '🤝', `貴人相助，前進 ${n} 格`);
+    await ctx.moveForward(n);
+  }
+
+  // 5. 保險優惠活動：下一次投保首年保費折抵
+  async function promo(tile, ctx) {
+    const cfg = SP().promo;
+    await UI.alert({
+      title: '🏷️ 保險優惠活動',
+      html: specialHtml('你發現某項符合自身需求的保險推出優惠方案。',
+        [`🏷️ 下一次投保首年保費折抵 ${pct(cfg.rate)}（上限 ${UI.fmtMoney(cfg.cap)}）`], '優惠會在下一次投保時自動結算，以退回現金的方式給付。'),
+      dismissible: false,
+    });
+    grantDiscount(ctx, cfg, '保險優惠活動');
+  }
+
+  // 6. 保單整理日：從初始保單池抽 1 張（初始保單池在改版計畫 P2 完成，目前先給現金）
+  async function attic(tile, ctx) {
+    const cfg = SP().attic;
+    await UI.alert({
+      title: '🗂️ 保單整理日',
+      html: specialHtml('你整理舊文件時，發現父母過去替你存的一筆小額保單紅利。', [`💰 現金 ${UI.fmtSigned(cfg.cash)}`]),
+      dismissible: false,
+    });
+    ctx.applyEffects({ cash: cfg.cash }, '保單整理日：發現舊保單紅利', '🗂️');
+  }
+
+  // 7. 錯過優惠：下一次投保需額外支付
+  async function missed(tile, ctx) {
+    const cfg = SP().missed;
+    await UI.alert({
+      title: '⌛ 錯過優惠',
+      html: specialHtml('你原本打算購買的保單優惠活動結束了。', [`💸 下一次投保需額外支付 ${UI.fmtMoney(cfg.surcharge)}`]),
+      dismissible: false,
+    });
+    ctx.state.policyPerks.surcharge += cfg.surcharge;
+    ctx.addHistory('life', '⌛', `錯過優惠：下次投保加付 ${UI.fmtMoney(cfg.surcharge)}`);
+    ctx.renderStatus();
+  }
+
   window.TileEvents = {
     start: async () => {}, // 停在起點不觸發事件
     chance,
     fate,
     insurance,
+    hospital,
+    checkup,
+    seminar,
+    myth,
+    mentor,
+    promo,
+    attic,
+    missed,
     rest,
     default: rest,
     illness, // 不是格子，由 js/game.js 依機率觸發

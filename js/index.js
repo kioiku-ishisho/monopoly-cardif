@@ -83,6 +83,7 @@
     form.lang.value = s.lang;
     form.querySelector(`input[name="theme"][value="${s.theme}"]`).checked = true;
     form.querySelector(`input[name="font"][value="${s.font}"]`).checked = true;
+    form.querySelector(`input[name="stockColor"][value="${s.stockColor}"]`).checked = true;
     form.reduceMotion.checked = s.reduceMotion;
     form.highContrast.checked = s.highContrast;
   }
@@ -92,6 +93,7 @@
       lang: form.lang.value,
       theme: form.querySelector('input[name="theme"]:checked').value,
       font: form.querySelector('input[name="font"]:checked').value,
+      stockColor: form.querySelector('input[name="stockColor"]:checked').value,
       reduceMotion: form.reduceMotion.checked,
       highContrast: form.highContrast.checked,
     });

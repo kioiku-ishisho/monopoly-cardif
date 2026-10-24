@@ -34,20 +34,26 @@
     { id: 'elder', name: '老年', ageFrom: 65, ageTo: null, laps: Infinity },
   ];
 
+  // group：地圖上的顏色分組；special 為 7 種特殊格（各 1 格，js/events.js 依 type 執行）
   const tileTypes = {
     start: { name: '起點', icon: '🏁' },
     chance: { name: '機會', icon: '❓' }, // 抽機會牌，可選擇接受或放棄
     fate: { name: '命運', icon: '🎴' }, // 抽命運牌，抽到即發生
-    insurance: { name: '保險', icon: '🛡️' }, // 業務員隨機介紹 3 種險種
+    insurance: { name: '保險業務員', icon: '🛡️' }, // 業務員隨機介紹 3 種險種
+    hospital: { name: '住院', icon: '🏥' }, // 擲骰決定住院天數，暫停移動 1 回合
     rest: { name: '休息', icon: '☕' }, // 什麼事都沒發生
+    checkup: { name: '保單健檢', icon: '🩺', group: 'special' },
+    seminar: { name: '理財講座', icon: '🎓', group: 'special' },
+    myth: { name: '觀念挑戰', icon: '🧐', group: 'special' },
+    mentor: { name: '貴人相助', icon: '🤝', group: 'special' },
+    promo: { name: '保險優惠', icon: '🏷️', group: 'special' },
+    attic: { name: '保單整理日', icon: '🗂️', group: 'special' },
+    missed: { name: '錯過優惠', icon: '⌛', group: 'special' },
   };
+  const SPECIAL_TYPES = Object.keys(tileTypes).filter((t) => tileTypes[t].group === 'special');
 
-  // 每圈各類格子數量（合計 60）；休息含 3 個角落
-  const boardCounts = {
-    youth: { start: 1, chance: 26, fate: 16, insurance: 10, rest: 7 },
-    middle: { start: 1, chance: 24, fate: 18, insurance: 9, rest: 8 },
-    elder: { start: 1, chance: 19, fate: 24, insurance: 6, rest: 10 },
-  };
+  // 一圈 60 格，三個人生階段共用；休息含 3 個角落，special 依 SPECIAL_TYPES 順序各放 1 格
+  const boardCounts = { start: 1, special: SPECIAL_TYPES.length, insurance: 5, hospital: 2, chance: 20, fate: 17, rest: 8 };
 
   // 角落為第 0、15、30、45 格：起點 + 3 個休息角落；其餘格子依比例平均分散排列
   function layoutBoard(counts, tiles = economy.tilesPerLap) {
@@ -55,9 +61,11 @@
     const board = new Array(tiles);
     board[0] = 'start';
     for (let i = side; i < tiles; i += side) board[i] = 'rest';
-    const remaining = { chance: counts.chance, fate: counts.fate, insurance: counts.insurance, rest: counts.rest - 3 };
+    const remaining = Object.fromEntries(Object.entries(counts).filter(([t]) => t !== 'start'));
+    remaining.rest -= 3;
     const slots = tiles - 4;
-    const used = { chance: 0, fate: 0, insurance: 0, rest: 0 };
+    const used = Object.fromEntries(Object.keys(remaining).map((t) => [t, 0]));
+    const specials = [...SPECIAL_TYPES];
     let k = 0;
     for (let i = 0; i < tiles; i++) {
       if (board[i]) continue;
@@ -70,13 +78,29 @@
         const lag = (remaining[t] * k) / slots - used[t];
         if (lag > bestLag) { bestLag = lag; best = t; }
       }
-      board[i] = best;
+      board[i] = best === 'special' ? specials.shift() : best;
       used[best]++;
     }
     return board;
   }
 
-  const boards = Object.fromEntries(Object.entries(boardCounts).map(([stage, c]) => [stage, layoutBoard(c)]));
+  const board = layoutBoard(boardCounts);
+
+  // 住院格：天數 = 骰子點數 × daysPerPip，醫療費 = 天數 × costPerDay；之後暫停移動 skipTurns 回合
+  const hospital = { daysPerPip: 2, costPerDay: 1000, skipTurns: 1 };
+
+  // 特殊格數值（js/events.js）
+  //   保險優惠類以 state.policyPerks 記錄，下一次投保時結算（js/insurance.js 的 buy）
+  const specialTiles = {
+    quizSeconds: 20, // 答題限時
+    checkup: { cash: 3000, coupon: { rate: 0.1, cap: 1000 } }, // 答對二選一：現金或保費優惠
+    seminar: { cash: 2000 },
+    myth: { win: 2000, lose: -2000 },
+    mentor: { steps: 3 },
+    promo: { rate: 0.2, cap: 2000 }, // 下一次投保首年保費折抵 20%，上限 2,000
+    attic: { cash: 5000 }, // 暫定：初始保單池完成前先給現金（改版計畫 P2）
+    missed: { surcharge: 1000 }, // 下一次投保額外支付
+  };
 
   // 保險：九種險種（js/insurance.js 負責投保、扣款與理賠）
   // 金額以「每月」計、時間以「月」計，遊戲中再依 economy.monthsPerStep 換算成格數
@@ -227,5 +251,5 @@
     { id: 'panic', title: '別在恐慌時賣出', text: '市場大跌時恐慌賣出，往往把帳面虧損變成真正的虧損。' },
   ];
 
-  window.GameData = { jobs, economy, stages, tileTypes, boardCounts, boards, insurance, cardTagOf, majorIllness, stocks, marketNews, tips };
+  window.GameData = { jobs, economy, stages, tileTypes, boardCounts, board, hospital, specialTiles, insurance, cardTagOf, majorIllness, stocks, marketNews, tips };
 })();

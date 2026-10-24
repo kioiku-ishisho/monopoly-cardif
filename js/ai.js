@@ -92,7 +92,7 @@
     // ---- 建議（每則對應一個可解鎖的提示） ----
     const advice = [];
     if (r.endReason === 'bankrupt' || r.forcedSales > 0) advice.push({ tip: 'emergency', text: '先建立 3～6 個月生活費的緊急預備金，再考慮投資，才不會在急需用錢時被迫賣出資產。' });
-    if (!r.insured || uninsured >= 2) advice.push({ tip: 'insurance', text: '在保險格及早投保醫療險、意外險與重大傷病險，用固定的小額保費轉嫁「付不起」的醫療風險；保費總額控制在月薪 10% 左右。' });
+    if (!r.insured || uninsured >= 2) advice.push({ tip: 'insurance', text: '在保險業務員格及早投保醫療險、意外險與重大傷病險，用固定的小額保費轉嫁「付不起」的醫療風險；保費總額控制在月薪 10% 左右。' });
     if (r.trades === 0) advice.push({ tip: 'compound', text: '試著及早開始投資，讓複利替你工作；即使每次金額不大，時間會放大效果。' });
     if (r.distinctStocks <= 1) advice.push({ tip: 'diversify', text: '把資金分散到不同風險的標的，例如 ETF 搭配穩健的金融股，降低波動。' });
     if (r.realizedPnL < 0) advice.push({ tip: 'panic', text: '市場下跌時先冷靜評估，避免恐慌性賣出把帳面損失變成真正損失。' });

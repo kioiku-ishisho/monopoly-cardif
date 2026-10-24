@@ -68,17 +68,19 @@
     <div class="modal-body">
       <ol>
         <li>在首頁按 <strong>隨機更換職業</strong> 選擇你的人生起點，每個職業的薪水與開銷都不同。</li>
-        <li>按 <strong>開始遊玩</strong> 進入遊戲，從 25 歲的 <strong>青年圈</strong> 出發。</li>
+        <li>按 <strong>開始遊玩</strong> 進入遊戲，從 25 歲的 <strong>青年</strong> 階段出發。</li>
         <li>按 <strong>擲骰子</strong> 依點數前進，踩到的格子會發生事件：
           <ul>
             <li>❓ <strong>機會</strong>：抽一張機會牌，可以選擇接受或放棄。</li>
             <li>🎴 <strong>命運</strong>：抽一張命運牌，抽到就一定會發生。</li>
-            <li>🛡️ <strong>保險</strong>：業務員會介紹 3 種險種（壽險、醫療、重大傷病、長照、年金等），越早投保越便宜，但保費會每月扣款。</li>
+            <li>🛡️ <strong>保險業務員</strong>：業務員會介紹 3 種險種（壽險、醫療、重大傷病、長照、年金等），越早投保越便宜，但保費會每月扣款。</li>
+            <li>🏥 <strong>住院</strong>：擲骰決定住院天數、支付醫療費，下回合暫停移動；有醫療險可以理賠。</li>
+            <li>⭐ <strong>特殊格</strong>：保單健檢、理財講座、觀念挑戰、貴人相助、保險優惠等 7 種，有些要回答保險知識題。</li>
             <li>☕ <strong>休息</strong>：什麼事都沒發生。</li>
           </ul>
           同一局遊戲中，不會抽到重複的機會或命運牌。
         </li>
-        <li>一圈 60 格，代表 <strong>5 年</strong>。青年（25–40 歲）走完 3 圈後進入 <strong>中年圈</strong>（40–65 歲），之後進入 <strong>老年圈</strong>（65 歲以上）。</li>
+        <li>一圈 60 格，代表 <strong>5 年</strong>，三個人生階段走同一圈。青年（25–40 歲）走完 3 圈後進入 <strong>中年</strong>（40–65 歲），再走 5 圈進入 <strong>老年</strong>（65 歲以上）。</li>
         <li>每走一格（1 個月）會自動領薪水並支付生活費；也可以在右上角 <strong>股票</strong> 買賣投資。</li>
         <li><strong>現金歸零（破產）</strong> 或 <strong>健康指數歸零</strong> 時遊戲結束，AI 會為你的人生評分並給予建議。</li>
       </ol>
@@ -132,6 +134,13 @@
             <label><input type="radio" name="font" value="normal"> 標準</label>
             <label><input type="radio" name="font" value="large"> 大</label>
             <label><input type="radio" name="font" value="xlarge"> 特大</label>
+          </div>
+        </fieldset>
+        <fieldset class="field">
+          <legend>股票漲跌顏色</legend>
+          <div class="radio-row">
+            <label><input type="radio" name="stockColor" value="tw"> <span class="neg">紅漲</span><span class="pos">綠跌</span>（台股）</label>
+            <label><input type="radio" name="stockColor" value="us"> <span class="pos">綠漲</span><span class="neg">紅跌</span>（美股）</label>
           </div>
         </fieldset>
         <label class="switch-row">減少動態效果 <input type="checkbox" name="reduceMotion"></label>

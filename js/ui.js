@@ -16,6 +16,7 @@
     root.dataset.font = s.font;
     root.dataset.motion = s.reduceMotion ? 'reduce' : 'auto';
     root.dataset.contrast = s.highContrast ? 'high' : 'normal';
+    root.dataset.stock = s.stockColor;
     root.dataset.theme = s.theme === 'system' ? (darkQuery.matches ? 'dark' : 'light') : s.theme;
   };
 
