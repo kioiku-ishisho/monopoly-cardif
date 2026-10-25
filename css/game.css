@@ -513,25 +513,6 @@
 .policy-total { padding: 10px 14px; border-radius: var(--radius-sm); background: var(--surface-2); }
 .policy-total strong { color: var(--primary); font-size: 1.1em; }
 .policy-h { font-size: 1rem; margin: 18px 0 10px; }
-.rule-list { padding-left: 1.3em; }
-.product-list { display: grid; gap: 12px; }
-@media (min-width: 640px) { .product-list { grid-template-columns: 1fr 1fr; } }
-.product-card {
-  padding: 14px;
-  border: 1px solid var(--border);
-  border-top: 4px solid var(--brand);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-}
-.product-card.owned { background: var(--surface-2); border-color: var(--primary); }
-.product-card h3 { font-size: 1.05rem; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.owned-badge { font-size: 0.75rem; padding: 2px 8px; border-radius: 999px; background: var(--primary); color: var(--on-primary); }
-.product-summary { font-weight: 700; margin-bottom: 8px; }
-.product-card .effect-list li { font-size: 0.8rem; padding: 2px 10px; font-weight: 500; }
-.product-premium { margin: 10px 0 0; font-size: 0.9rem; }
-.product-card { display: flex; flex-direction: column; }
-.product-quote { margin: 10px 0 0; padding-top: 10px; border-top: 1px dashed var(--border); font-size: 0.95rem; }
-.product-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: auto; padding-top: 10px; }
 .policy-perk { margin: 0 0 4px; padding: 8px 12px; border-radius: var(--radius-sm); border: 2px solid #0ca678; font-weight: 700; }
 
 /* 提示訊息放在市場跑馬燈下方，避免蓋住 */

@@ -188,7 +188,7 @@
         <div class="offer-head">
           <h3 id="offer-${prod.id}">${prod.icon} ${UI.escape(prod.name)}</h3>
           <div class="offer-actions">
-            <button class="btn btn-sm btn-ghost" type="button" data-proposal="${prod.id}">📄 建議書</button>
+            <button class="btn btn-sm btn-ghost" type="button" data-proposal="${prod.id}">產生建議書</button>
             <button class="btn btn-sm btn-primary" value="buy:${prod.id}">投保</button>
           </div>
         </div>
@@ -302,7 +302,7 @@
             <div><strong>${prod.icon} ${UI.escape(prod.name)}</strong><span class="chat-rec-price">${UI.escape(price)}</span></div>
             <p>${UI.escape(r.reason)}</p>
             <div class="chat-rec-actions">
-              <button class="btn btn-sm btn-ghost" type="button" data-proposal="${prod.id}">📄 建議書</button>
+              <button class="btn btn-sm btn-ghost" type="button" data-proposal="${prod.id}">產生建議書</button>
               <button class="btn btn-sm btn-primary" type="button" data-rec="${prod.id}" ${q.ok ? '' : 'disabled'}>投保</button>
             </div>
           </div>`;

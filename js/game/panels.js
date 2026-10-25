@@ -126,7 +126,7 @@
         <div><dt>人生階段</dt><dd>${stage().name}</dd></div>
         <div><dt>${stage().id === 'elder' ? '每月退休金' : '每月收入'}</dt><dd>${UI.fmtMoney(income)}</dd></div>
         <div><dt>物價指數</dt><dd>${priceIndex().toFixed(2)}</dd>
-          <dd class="info-sub">每年通膨 ${Math.round(E.inflation * 100)}%；薪資每圈調升 ${Math.round(E.salaryGrowthPerLap * 100)}%（目前月薪 ${UI.fmtMoney(salaryNow())}）</dd></div>
+          <dd class="info-sub">每年通膨 ${+(E.inflation * 100).toFixed(1)}%；薪資每年成長 ${+(E.salaryGrowth * 100).toFixed(1)}%（每圈調升一次）（目前月薪 ${UI.fmtMoney(salaryNow())}）</dd></div>
         <div><dt>每月生活費</dt><dd>${UI.fmtMoney(expenseNow())}</dd>
           ${state.ltc ? `<dd class="info-sub">另加長照照護費 ${UI.fmtMoney(Ins.careCost())}</dd>` : ''}</div>
         <div><dt>事件造成的淨收入變化</dt><dd class="${state.netIncomeAdj >= 0 ? 'pos' : 'neg'}">${UI.fmtSigned(state.netIncomeAdj)}/月</dd></div>
@@ -135,7 +135,7 @@
         ${benefit ? `<div><dt>每月保險給付</dt><dd class="pos">${UI.fmtSigned(benefit)}</dd></div>` : ''}
         <div><dt>每月結餘</dt><dd class="${net >= 0 ? 'pos' : 'neg'}">${UI.fmtSigned(net)}</dd></div>
         <div><dt>現金</dt><dd>${UI.fmtMoney(state.cash)}</dd>
-          <dd class="info-sub">銀行年利率 ${(E.bankRate * 100).toFixed(1)}%，累計利息 ${UI.fmtMoney(stats.interestTotal)}</dd></div>
+          <dd class="info-sub">活存年利率 ${+(E.bankRate * 100).toFixed(2)}%，累計利息 ${UI.fmtMoney(stats.interestTotal)}</dd></div>
         <div><dt>股票市值</dt><dd>${UI.fmtMoney(stockValue())}</dd></div>
         <div><dt>保單價值</dt><dd>${UI.fmtMoney(Ins.value())}</dd>
           <dd class="info-sub">投資型保險與年金險帳戶</dd></div>
@@ -194,19 +194,25 @@
     $('#dlg-history').showModal();
   });
 
-  // ===== 暫停 / 離開 =====
+  // ===== 暫停（含離開遊戲） =====
   $('#btn-pause').addEventListener('click', async () => {
     if (state.over) return;
     state.paused = true;
-    const choice = await UI.modal({
-      title: '遊戲暫停',
-      body: pauseBody(),
-      actions: [
-        { label: '重看新手教學', value: 'tutorial', variant: 'ghost' },
-        { label: '繼續遊戲', value: 'ok', variant: 'primary' },
-      ],
-    });
-    if (choice === 'tutorial') await Tutorial.run();
+    for (;;) {
+      const choice = await UI.modal({
+        title: '遊戲暫停',
+        body: pauseBody(),
+        actions: [
+          { label: '離開遊戲', value: 'quit', variant: 'danger' },
+          { label: '重看新手教學', value: 'tutorial', variant: 'ghost' },
+          { label: '繼續遊戲', value: 'ok', variant: 'primary' },
+        ],
+      });
+      if (choice === 'tutorial') await Tutorial.run();
+      // 取消離開時回到暫停視窗
+      if (choice === 'quit' && !(await confirmQuit())) continue;
+      break;
+    }
     state.paused = false;
   });
 
@@ -241,24 +247,21 @@
     return el;
   }
 
-  $('#btn-quit').addEventListener('click', async () => {
-    const wasPaused = state.paused;
-    state.paused = true;
+  async function confirmQuit() {
     const ok = await UI.confirm({
       title: '離開遊戲',
       message: '確定要離開嗎？本局進度與紀錄都不會被保存。',
       okText: '離開',
-      cancelText: '繼續玩',
+      cancelText: '返回',
       danger: true,
     });
     if (ok) {
       state.over = true;
       Store.session.remove('newGame');
       location.href = 'index.html';
-      return;
     }
-    state.paused = wasPaused;
-  });
+    return ok;
+  }
 
   Object.assign(G, { perkText, renderStatus, renderSide, renderSheet, isSheetOpen, renderHistory });
 })(window.Game);

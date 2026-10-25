@@ -41,8 +41,9 @@
       stats.premiumRatioSum += Ins.monthlyPremium() / salaryNow();
       stats.premiumSamples++;
     }
-    state.salaryIndex *= 1 + E.salaryGrowthPerLap;
-    addHistory('life', '🧾', `物價指數 ${priceIndex().toFixed(2)}，每月生活費調整為 ${UI.fmtMoney(expenseNow())}；薪資調升 ${Math.round(E.salaryGrowthPerLap * 100)}%，月薪 ${UI.fmtMoney(salaryNow())}`);
+    const raise = Math.pow(1 + E.salaryGrowth, E.yearsPerLap) - 1;
+    state.salaryIndex *= 1 + raise;
+    addHistory('life', '🧾', `物價指數 ${priceIndex().toFixed(2)}，每月生活費調整為 ${UI.fmtMoney(expenseNow())}；薪資調升 ${(raise * 100).toFixed(1)}%，月薪 ${UI.fmtMoney(salaryNow())}`);
     const decay = E.healthDecayPerLap[stage().id];
     if (decay > 0) addHistory('life', '⏳', `歲月流逝，健康 -${decay}`);
     else if (decay < 0 && state.health < 100) addHistory('life', '💪', `年輕身體恢復得快，健康 +${-decay}`);

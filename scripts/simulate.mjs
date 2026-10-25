@@ -170,7 +170,7 @@ function runGame(job, strategy) {
   function passStart() {
     state.lap++;
     Ins.onLap();
-    state.salaryIndex *= 1 + E.salaryGrowthPerLap;
+    state.salaryIndex *= Math.pow(1 + E.salaryGrowth, E.yearsPerLap);
     state.health = clamp(state.health - E.healthDecayPerLap[stage().id], 0, 100);
     const stress = state.cash < expense() * E.stress.months ? E.stress.happiness : 0;
     state.happiness = clamp(state.happiness - E.happinessDecayPerLap[stage().id] - stress, 0, 100);

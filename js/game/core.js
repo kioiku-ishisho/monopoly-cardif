@@ -38,7 +38,7 @@
     policyPerks: { discount: null, surcharge: 0 }, // 特殊格給的下次投保優惠 { rate, cap } 與加價
     quizUsed: [], // 本局答過的題目 id
     seminarUsed: [], // 本局讀過的理財講座文章 id
-    salaryIndex: 1, // 薪資指數：每圈調升 economy.salaryGrowthPerLap
+    salaryIndex: 1, // 薪資指數：每圈調升 economy.salaryGrowth 的 yearsPerLap 年複利
     priceShock: 1, // 經濟事件造成的物價一次跳升（乘在通膨指數上）
     story: { schedule: [], pending: [], illness: null, seen: [] }, // 經濟劇本（js/data.js 的 marketStory）
     gameId: null, // 伺服器端的遊戲 id，用來抽牌
