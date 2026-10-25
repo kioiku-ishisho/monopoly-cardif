@@ -12,7 +12,7 @@ export const STAGES = ['youth', 'middle', 'elder'];
 export const KINDS = ['chance', 'fate'];
 export const GAME_ID = /^[0-9a-f]{32}$/;
 export const PLAYER_ID = /^[0-9a-f-]{36}$/;
-export const CARD_ID = /^[YMO][1-6]-\d{2}$/;
+export const CARD_ID = /^[YMO][1-7]-\d{2}$/;
 
 // 包裝 handler：只接受指定的 HTTP 方法、解析 body、統一錯誤格式
 function methodHandler(method, fn) {

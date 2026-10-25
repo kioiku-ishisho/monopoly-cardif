@@ -2,7 +2,7 @@
 (function () {
   // risk：職業對事件發生機率的倍率（未列出的為 1）
   //   accident 意外、hospital 一般住院、heart 心血管（心肌梗塞、腦中風）、mental 心理壓力（降低幸福的命運牌）
-  //   命運牌在伺服器端依此加權抽牌（api/games/[id]/draw.js），重大疾病在 js/game.js 套用
+  //   命運牌在伺服器端依此加權抽牌（api/games/[id]/draw.js 的 drawWeight），重大疾病在 js/game.js 套用
   const jobs = [
     { id: 'engineer', name: '軟體工程師', icon: '👩‍💻', color: '#4c6ef5', salary: 58000, expense: 32000, desc: '收入高、工時長，要多留意健康。', risk: { accident: 0.7, heart: 1.3, mental: 1.4 } },
     { id: 'teacher', name: '國小老師', icon: '👨‍🏫', color: '#2b8a3e', salary: 46000, expense: 28000, desc: '收入穩定，退休制度完善。', risk: {} },
@@ -26,6 +26,15 @@
     if (tag === 'heart' || tag === 'stroke') w *= risk.heart || 1;
     if (card.happiness < 0) w *= risk.mental || 1;
     return w;
+  }
+
+  // 職業事件（docs/event-cards.md 第四篇，card.job）只有該職業抽得到，抽中機率是一般牌的 jobCardWeight 倍
+  const jobCardWeight = 8;
+
+  // 一張牌對某職業的抽牌權重（機會、命運共用）；0 表示抽不到
+  function drawWeight(job, card) {
+    if (card.job) return job && card.job === job.id ? jobCardWeight : 0;
+    return card.kind === 'fate' ? fateWeight(job, card) : 1;
   }
 
   // 一圈 = 60 格 = 5 年，因此一格 = 1 個月
@@ -63,7 +72,7 @@
     { id: 'elder', name: '老年', ageFrom: 65, ageTo: null, laps: Infinity },
   ];
 
-  // group：地圖上的顏色分組；special 為 7 種特殊格（各 1 格，js/events.js 依 type 執行）
+  // group：地圖上的顏色分組；special 為 7 種特殊格（js/events.js 依 type 執行）
   const tileTypes = {
     start: { name: '起點', icon: '🏁' },
     chance: { name: '機會', icon: '❓' }, // 抽機會牌，可選擇接受或放棄
@@ -81,8 +90,11 @@
   };
   const SPECIAL_TYPES = Object.keys(tileTypes).filter((t) => tileTypes[t].group === 'special');
 
-  // 一圈 60 格，三個人生階段共用；休息含 3 個角落，special 依 SPECIAL_TYPES 順序各放 1 格
-  const boardCounts = { start: 1, special: SPECIAL_TYPES.length, insurance: 5, hospital: 2, chance: 20, fate: 17, rest: 8 };
+  // 特殊格依此順序放置：7 種各 1 格，保單健檢與觀念挑戰再各多 1 格（排在後面，與第 1 格隔開）
+  const SPECIAL_SEQUENCE = [...SPECIAL_TYPES, 'checkup', 'myth'];
+
+  // 一圈 60 格，三個人生階段共用；休息含 3 個角落
+  const boardCounts = { start: 1, special: SPECIAL_SEQUENCE.length, insurance: 5, hospital: 2, chance: 19, fate: 16, rest: 8 };
 
   // 角落為第 0、15、30、45 格：起點 + 3 個休息角落；其餘格子依比例平均分散排列
   function layoutBoard(counts, tiles = economy.tilesPerLap) {
@@ -94,7 +106,7 @@
     remaining.rest -= 3;
     const slots = tiles - 4;
     const used = Object.fromEntries(Object.keys(remaining).map((t) => [t, 0]));
-    const specials = [...SPECIAL_TYPES];
+    const specials = [...SPECIAL_SEQUENCE];
     let k = 0;
     for (let i = 0; i < tiles; i++) {
       if (board[i]) continue;
@@ -115,20 +127,30 @@
 
   const board = layoutBoard(boardCounts);
 
-  // 住院格：天數 = 骰子點數 × daysPerPip，醫療費 = 天數 × costPerDay；之後暫停移動 skipTurns 回合
-  const hospital = { daysPerPip: 2, costPerDay: 1000, skipTurns: 1 };
+  // 依人生階段取值：v 可以是數字，或 { youth, middle, elder }
+  const byStage = (v, stageId) => (typeof v === 'number' ? v : v[stageId]);
 
-  // 特殊格數值（js/events.js）
+  // 住院格：天數 = 骰子點數 × daysPerPip，醫療費 = 天數 × costPerDay（依階段，再依物價調整）；之後暫停移動 skipTurns 回合
+  const hospital = { daysPerPip: 2, costPerDay: { youth: 1000, middle: 2000, elder: 3000 }, skipTurns: 1 };
+
+  // 特殊格數值（js/events.js），金額依人生階段取值（byStage）
+  //   現金獎懲和事件牌一樣再依物價調整；與保費相關的折抵上限、加付金額不調整（保費本身不隨物價變動）
+  //   參考事件牌現金的中位數：青年約 6,000～7,000，中年、老年約 5～6 萬（調整物價前）
   //   保險優惠類以 state.policyPerks 記錄，下一次投保時結算（js/insurance.js 的 buy）
   const specialTiles = {
     quizSeconds: 20, // 答題限時
-    checkup: { cash: 3000, coupon: { rate: 0.1, cap: 1000 } }, // 答對二選一：現金或保費優惠
-    seminar: { cash: 1000, perCorrect: 500 }, // 出席獎勵 + 每答對一題（js/seminar.js 每篇 3 題）
-    myth: { win: 2000, lose: -2000 },
+    // 答對二選一：現金或保費優惠
+    checkup: {
+      cash: { youth: 5000, middle: 25000, elder: 25000 },
+      coupon: { rate: 0.3, cap: { youth: 5000, middle: 15000, elder: 15000 } },
+    },
+    // 出席獎勵 + 每答對一題（js/seminar.js 每篇 3 題）
+    seminar: { cash: { youth: 2000, middle: 10000, elder: 10000 }, perCorrect: { youth: 1000, middle: 5000, elder: 5000 } },
+    myth: { win: { youth: 4000, middle: 20000, elder: 20000 }, lose: { youth: -4000, middle: -20000, elder: -20000 } },
     mentor: { steps: 3 },
-    promo: { rate: 0.2, cap: 2000 }, // 下一次投保首年保費折抵 20%，上限 2,000
-    attic: { cash: 5000 }, // 舊保單都抽完時改給現金
-    missed: { surcharge: 1000 }, // 下一次投保額外支付
+    promo: { rate: 0.2, cap: { youth: 3000, middle: 8000, elder: 8000 } }, // 下一次投保首年保費折抵 20%
+    attic: { cash: { youth: 10000, middle: 50000, elder: 50000 } }, // 舊保單都抽完時改給現金
+    missed: { surcharge: { youth: 1500, middle: 5000, elder: 5000 } }, // 下一次投保額外支付
   };
 
   // 保險：九種險種（js/insurance.js 負責投保、扣款與理賠）
@@ -278,15 +300,19 @@
     accident: [
       'Y5-02', 'Y5-06', 'Y5-21', 'Y5-26', 'Y5-35', 'Y5-41', 'Y5-45', 'M5-11', 'M5-27', 'M5-43',
       'O1-15', 'O1-32', 'O5-01', 'O5-07', 'O5-20', 'O5-29', 'O5-47',
+      // 職業事件
+      'Y7-14', 'Y7-22', 'Y7-25', 'Y7-26', 'Y7-44', 'Y7-49', 'M7-14', 'M7-22', 'M7-26', 'M7-45', 'M7-50',
     ],
     hospital: [
       'Y5-01', 'Y5-04', 'Y5-12', 'Y5-15', 'Y5-16', 'Y5-18', 'Y5-19', 'Y5-23', 'Y5-25', 'Y5-30', 'Y5-31', 'Y5-37',
       'Y5-40', 'Y5-46', 'M5-03', 'M5-04', 'M5-06', 'M5-08', 'M5-10', 'M5-13', 'M5-18', 'M5-21', 'M5-22', 'M5-24',
       'M5-25', 'M5-30', 'M5-32', 'M5-34', 'M5-39', 'M5-40', 'M5-42', 'M5-44', 'M5-45', 'O1-25', 'O5-03', 'O5-08',
       'O5-09', 'O5-11', 'O5-17', 'O5-19', 'O5-26', 'O5-30', 'O5-32', 'O5-34', 'O5-35', 'O5-38', 'O5-42',
+      // 職業事件
+      'M7-02', 'M7-07', 'M7-20', 'M7-25', 'M7-44', 'M7-49',
     ],
     cancer: ['O5-36'],
-    heart: ['O5-21'],
+    heart: ['O5-21', 'M7-55'],
     stroke: ['O5-02'],
     esrd: ['O3-41', 'O5-13'],
   };
@@ -426,5 +452,5 @@
     { id: 'panic', title: '別在恐慌時賣出', text: '市場大跌時恐慌賣出，往往把帳面虧損變成真正的虧損。' },
   ];
 
-  window.GameData = { jobs, fateWeight, economy, stages, tileTypes, boardCounts, board, hospital, specialTiles, insurance, cardTagOf, majorIllness, stocks, marketNews, marketStory, tips };
+  window.GameData = { jobs, fateWeight, drawWeight, economy, stages, tileTypes, boardCounts, board, byStage, hospital, specialTiles, insurance, cardTagOf, majorIllness, stocks, marketNews, marketStory, tips };
 })();

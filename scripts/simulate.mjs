@@ -6,7 +6,7 @@
 //   node scripts/simulate.mjs --set economy.inflation=0.03 --set economy.bankRate=0.01   試算參數（不會改檔案）
 //
 // 載入真正的 js/data.js、js/insurance.js 與 docs/event-cards.md，回合流程照 js/game.js 與 js/events.js 寫成無畫面版本。
-// 簡化：股票只模擬台灣50 ETF；事件牌不分伺服器、直接從本機牌組抽（命運牌一樣依職業加權）。改 game.js 的規則時，這裡也要一起改。
+// 簡化：股票只模擬台灣50 ETF；事件牌不分伺服器、直接從本機牌組抽（一樣依職業加權，含職業事件）。改 game.js 的規則時，這裡也要一起改。
 //
 // 策略：
 //   none     不買保險、不投資，機會牌一半接受一半放棄（「不做規劃」）
@@ -86,6 +86,7 @@ function runGame(job, strategy) {
   const monthsPassed = () => state.steps * MPS;
   const priceIndex = () => Math.pow(1 + E.inflation, monthsPassed() / 12) * state.priceShock;
   const inflate = (n) => (n ? Math.round((n * priceIndex()) / 100) * 100 : 0);
+  const at = (v) => D.byStage(v, stage().id);
   const expense = () => Math.round(job.expense * priceIndex());
   const Ins = Insurance.create({
     state, job, stats, age, etfPrice: () => etf.price, addHistory() {}, logDecision() {}, toast() {},
@@ -186,9 +187,9 @@ function runGame(job, strategy) {
   }
 
   function draw(kind) {
-    const pool = DECK[`${stage().id}-${kind}`].filter((c) => !drawn.has(c.id));
+    const pool = DECK[`${stage().id}-${kind}`].filter((c) => !drawn.has(c.id) && D.drawWeight(job, c) > 0);
     if (!pool.length) return null;
-    const card = kind === 'fate' ? pickWeighted(pool, (c) => D.fateWeight(job, c)) : pool[Math.floor(rand() * pool.length)];
+    const card = pickWeighted(pool, (c) => D.drawWeight(job, c));
     drawn.add(card.id);
     return { ...card, cash: inflate(card.cash), netIncome: inflate(card.netIncome) };
   }
@@ -255,21 +256,21 @@ function runGame(job, strategy) {
       }
       case 'hospital': {
         const days = d6() * D.hospital.daysPerPip;
-        resolveFate({ cash: -inflate(days * D.hospital.costPerDay) }, 'hospital', days);
+        resolveFate({ cash: -inflate(days * at(D.hospital.costPerDay)) }, 'hospital', days);
         state.skipTurns = D.hospital.skipTurns;
         break;
       }
       case 'insurance': buyPlanned(); break;
-      case 'checkup': if (rand() < quizRate) apply({ cash: SP.checkup.cash }); break;
-      case 'seminar': apply({ cash: SP.seminar.cash + 3 * SP.seminar.perCorrect * quizRate }); break;
-      case 'myth': apply({ cash: rand() < quizRate ? SP.myth.win : SP.myth.lose }); break;
+      case 'checkup': if (rand() < quizRate) apply({ cash: inflate(at(SP.checkup.cash)) }); break;
+      case 'seminar': apply({ cash: inflate(at(SP.seminar.cash) + 3 * at(SP.seminar.perCorrect) * quizRate) }); break;
+      case 'myth': apply({ cash: inflate(at(rand() < quizRate ? SP.myth.win : SP.myth.lose)) }); break;
       case 'mentor':
         for (let i = 0; i < SP.mentor.steps; i++) step();
         runTile(D.board[state.position]);
         break;
-      case 'promo': state.policyPerks.discount = { rate: SP.promo.rate, cap: SP.promo.cap }; break;
-      case 'missed': state.policyPerks.surcharge += SP.missed.surcharge; break;
-      case 'attic': if (!Ins.drawLegacy('')) apply({ cash: SP.attic.cash }); break;
+      case 'promo': state.policyPerks.discount = { rate: SP.promo.rate, cap: at(SP.promo.cap) }; break;
+      case 'missed': state.policyPerks.surcharge += at(SP.missed.surcharge); break;
+      case 'attic': if (!Ins.drawLegacy('')) apply({ cash: inflate(at(SP.attic.cash)) }); break;
       default: break;
     }
   }

@@ -1,5 +1,6 @@
 // POST /api/games/:id/draw  { kind, stage } -> { card }，該階段抽完時 404 exhausted
-// 命運牌依玩家職業加權（js/data.js 的 jobs[].risk，例如外送員較容易抽到意外）
+// 依玩家職業加權（js/data.js 的 drawWeight）：命運牌看 jobs[].risk，例如外送員較容易抽到意外；
+// 職業事件只有該職業抽得到
 import { randomInt } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
 import { gameData } from '../../_lib/catalog.js';
@@ -23,20 +24,21 @@ export default postHandler(async (req, body) => {
     if (!game.exists) throw new HttpError(404, 'game_not_found');
     if (game.get('evaluation')) throw new HttpError(409, 'game_finished');
     const drawn = new Set(game.get('drawn') || []);
-    const pool = deck.filter((c) => !drawn.has(c.id));
-    if (!pool.length) throw new HttpError(404, 'exhausted');
-    const picked = kind === 'fate' ? weightedPick(pool, game.get('jobId')) : pool[randomInt(pool.length)];
+    const picked = weightedPick(deck.filter((c) => !drawn.has(c.id)), game.get('jobId'));
+    if (!picked) throw new HttpError(404, 'exhausted');
     tx.update(ref, { drawn: FieldValue.arrayUnion(picked.id) });
     return picked;
   });
   return { card };
 });
 
+// 權重全為 0（只剩其他職業的牌）時回傳 null
 function weightedPick(pool, jobId) {
-  const { jobs, fateWeight } = gameData();
+  const { jobs, drawWeight } = gameData();
   const job = jobs.find((j) => j.id === jobId);
-  const weights = pool.map((c) => fateWeight(job, c));
+  const weights = pool.map((c) => drawWeight(job, c));
   const total = weights.reduce((s, w) => s + w, 0);
+  if (!total) return null;
   let r = (randomInt(1_000_000) / 1_000_000) * total;
   for (let i = 0; i < pool.length; i++) {
     r -= weights[i];

@@ -27,9 +27,10 @@
 
   function cardHtml(card, { note = '', warn = false, extra = [], hideEffects = false } = {}) {
     const items = hideEffects ? [] : [...effectItems(card), ...extra];
+    const job = card.job && GameData.jobs.find((j) => j.id === card.job);
     return `
       <div class="event-card" data-kind="${card.kind}">
-        <div class="card-kind"><span>${GameData.tileTypes[card.kind].icon} ${KIND_LABEL[card.kind]}</span><span class="card-id">${UI.escape(card.id)}</span></div>
+        <div class="card-kind"><span>${GameData.tileTypes[card.kind].icon} ${KIND_LABEL[card.kind]}${job ? `<span class="card-job">${job.icon} ${UI.escape(job.name)}職業事件</span>` : ''}</span><span class="card-id">${UI.escape(card.id)}</span></div>
         <p class="card-text">${UI.escape(card.text)}</p>
         ${items.length ? `<ul class="effect-list" aria-label="影響">${items.map((t) => `<li>${UI.escape(t)}</li>`).join('')}</ul>` : ''}
         ${note ? `<p class="card-note${warn ? ' warn' : ''}">${UI.escape(note)}</p>` : ''}
@@ -477,7 +478,7 @@
     });
     const pip = await ctx.rollDice();
     const days = pip * cfg.daysPerPip;
-    const cost = ctx.inflateAmount(days * cfg.costPerDay);
+    const cost = ctx.inflateAmount(days * GameData.byStage(cfg.costPerDay, ctx.stageId()));
     ctx.stats.hospitalDays += days;
     const card = {
       kind: 'hospital', id: '住院', cash: -cost, netIncome: 0, health: 0,
@@ -542,6 +543,9 @@
 
   // ===== 特殊格 =====
   const SP = () => GameData.specialTiles;
+  // 依目前人生階段取值；現金獎懲再依物價調整（和事件牌一樣）
+  const atStage = (ctx, v) => GameData.byStage(v, ctx.stageId());
+  const cashAt = (ctx, v) => ctx.inflateAmount(atStage(ctx, v));
   const pct = (rate) => `${Math.round(rate * 100)}%`;
 
   function specialHtml(text, items, note = '') {
@@ -565,6 +569,8 @@
   // 1. 保單健檢機會：答對可選現金或保費優惠
   async function checkup(tile, ctx) {
     const cfg = SP().checkup;
+    const cash = cashAt(ctx, cfg.cash);
+    const coupon = { rate: cfg.coupon.rate, cap: atStage(ctx, cfg.coupon.cap) };
     const title = '🩺 保單健檢機會';
     const res = await askQuiz(ctx, { title, intro: '你參加了一場免費的保險健檢活動，重新了解自己目前的保障內容。答對保險知識題可以獲得獎勵！' });
     if (!res.correct) {
@@ -575,17 +581,17 @@
       title,
       body: quizResultHtml(res, '<p>請選擇一項獎勵：</p>'),
       actions: [
-        { label: `🏷️ 下次投保首年保費折抵 ${pct(cfg.coupon.rate)}（上限 ${UI.fmtMoney(cfg.coupon.cap)}）`, value: 'coupon', variant: 'ghost' },
-        { label: `💰 現金 ${UI.fmtSigned(cfg.cash)}`, value: 'cash', variant: 'primary' },
+        { label: `🏷️ 下次投保首年保費折抵 ${pct(coupon.rate)}（上限 ${UI.fmtMoney(coupon.cap)}）`, value: 'coupon', variant: 'ghost' },
+        { label: `💰 現金 ${UI.fmtSigned(cash)}`, value: 'cash', variant: 'primary' },
       ],
       dismissible: false,
     });
     if (reward === 'coupon') {
-      grantDiscount(ctx, cfg.coupon, '保單健檢優惠');
+      grantDiscount(ctx, coupon, '保單健檢優惠');
       ctx.logDecision('保單健檢答對，選擇保費優惠', 'special');
     } else {
-      ctx.applyEffects({ cash: cfg.cash }, '保單健檢答對獎勵', '🩺');
-      ctx.logDecision(`保單健檢答對，選擇現金 ${UI.fmtMoney(cfg.cash)}`, 'special');
+      ctx.applyEffects({ cash }, '保單健檢答對獎勵', '🩺');
+      ctx.logDecision(`保單健檢答對，選擇現金 ${UI.fmtMoney(cash)}`, 'special');
     }
   }
 
@@ -593,6 +599,8 @@
   //    出席給基本現金，每答對一題再加 perCorrect
   async function seminar(tile, ctx) {
     const cfg = SP().seminar;
+    const base = cashAt(ctx, cfg.cash);
+    const perCorrect = cashAt(ctx, cfg.perCorrect);
     const title = '🎓 理財講座';
     const used = (ctx.state.seminarUsed ||= []);
     const art = Seminar.pick(used);
@@ -663,7 +671,7 @@
 
     // ---- 結果 ----
     const correct = art.questions.filter((q, i) => picked[i] === q.answer).length;
-    const cash = cfg.cash + correct * cfg.perCorrect;
+    const cash = base + correct * perCorrect;
     await UI.alert({
       title,
       html: `
@@ -674,7 +682,7 @@
               <li>${picked[i] === q.answer ? '⭕' : '❌'} ${UI.escape(q.q)}<br>
                 <span class="card-note">正確答案：<strong>${UI.escape(q.options[q.answer])}</strong></span></li>`).join('')}
           </ol>
-          <ul class="effect-list"><li>💰 出席獎勵 ${UI.fmtSigned(cfg.cash)}</li>${correct ? `<li>🧠 答對獎勵 ${UI.fmtSigned(correct * cfg.perCorrect)}</li>` : ''}</ul>
+          <ul class="effect-list"><li>💰 出席獎勵 ${UI.fmtSigned(base)}</li>${correct ? `<li>🧠 答對獎勵 ${UI.fmtSigned(correct * perCorrect)}</li>` : ''}</ul>
         </div>`,
       dismissible: false,
     });
@@ -687,7 +695,7 @@
     const cfg = SP().myth;
     const title = '🧐 保障觀念挑戰';
     const res = await askQuiz(ctx, { title, intro: '你看到一則宣稱「買了保險，所有醫療費用都能理賠」的廣告。先想想看：', preferMyth: true });
-    const cash = res.correct ? cfg.win : cfg.lose;
+    const cash = cashAt(ctx, res.correct ? cfg.win : cfg.lose);
     const msg = res.correct
       ? `<ul class="effect-list"><li>💰 現金 ${UI.fmtSigned(cash)}</li></ul>`
       : `<p class="card-note warn">你被廣告說服，買到不符合需求的保單。</p><ul class="effect-list"><li>💸 現金 ${UI.fmtSigned(cash)}</li></ul>`;
@@ -711,7 +719,7 @@
 
   // 5. 保險優惠活動：下一次投保首年保費折抵
   async function promo(tile, ctx) {
-    const cfg = SP().promo;
+    const cfg = { rate: SP().promo.rate, cap: atStage(ctx, SP().promo.cap) };
     await UI.alert({
       title: '🏷️ 保險優惠活動',
       html: specialHtml('你發現某項符合自身需求的保險推出優惠方案。',
@@ -736,25 +744,25 @@
       ctx.renderStatus();
       return;
     }
-    const cfg = SP().attic;
+    const cash = cashAt(ctx, SP().attic.cash);
     await UI.alert({
       title: '🗂️ 保單整理日',
-      html: specialHtml('你整理舊文件時，發現父母過去替你存的一筆小額保單紅利。', [`💰 現金 ${UI.fmtSigned(cfg.cash)}`]),
+      html: specialHtml('你整理舊文件時，發現父母過去替你存的一筆小額保單紅利。', [`💰 現金 ${UI.fmtSigned(cash)}`]),
       dismissible: false,
     });
-    ctx.applyEffects({ cash: cfg.cash }, '保單整理日：發現舊保單紅利', '🗂️');
+    ctx.applyEffects({ cash }, '保單整理日：發現舊保單紅利', '🗂️');
   }
 
   // 7. 錯過優惠：下一次投保需額外支付
   async function missed(tile, ctx) {
-    const cfg = SP().missed;
+    const surcharge = atStage(ctx, SP().missed.surcharge);
     await UI.alert({
       title: '⌛ 錯過優惠',
-      html: specialHtml('你原本打算購買的保單優惠活動結束了。', [`💸 下一次投保需額外支付 ${UI.fmtMoney(cfg.surcharge)}`]),
+      html: specialHtml('你原本打算購買的保單優惠活動結束了。', [`💸 下一次投保需額外支付 ${UI.fmtMoney(surcharge)}`]),
       dismissible: false,
     });
-    ctx.state.policyPerks.surcharge += cfg.surcharge;
-    ctx.addHistory('life', '⌛', `錯過優惠：下次投保加付 ${UI.fmtMoney(cfg.surcharge)}`);
+    ctx.state.policyPerks.surcharge += surcharge;
+    ctx.addHistory('life', '⌛', `錯過優惠：下次投保加付 ${UI.fmtMoney(surcharge)}`);
     ctx.renderStatus();
   }
 

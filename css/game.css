@@ -184,6 +184,7 @@
   box-shadow: var(--shadow-sm);
 }
 .card-kind { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-weight: 900; }
+.card-job { margin-left: 8px; padding: 2px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); font-size: 0.8rem; font-weight: 700; }
 .card-id { font-size: 0.8rem; color: var(--text-muted); font-weight: 500; }
 .card-text { font-size: 1.1rem; font-weight: 700; margin-bottom: 12px; }
 .effect-list { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; padding: 0 !important; margin: 0 !important; }
