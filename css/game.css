@@ -231,6 +231,9 @@
   gap: 6px;
   z-index: 10;
   pointer-events: none;
+  /* 寬度由內容決定；left: 50% 時預設最多只有半個畫面寬，結果文字會被擠成好幾行 */
+  width: max-content;
+  max-width: calc(100vw - 140px); /* 兩側留給右下角的地圖按鈕 */
 }
 .dice-btn {
   pointer-events: auto;
@@ -260,13 +263,19 @@
 .dice-result {
   margin: 0;
   min-height: 1.6em;
-  padding: 0 12px;
-  border-radius: 999px;
+  max-width: 100%;
+  padding: 2px 14px;
+  border-radius: 16px;
   background: var(--surface);
   font-weight: 700;
+  line-height: 1.45;
+  text-align: center;
   box-shadow: var(--shadow-sm);
 }
 .dice-result:empty { visibility: hidden; }
+/* 移動結果與收支各自不斷行，畫面窄時只在兩段之間換行 */
+.dice-result .dr-text, .dice-result .dr-cash { white-space: nowrap; }
+@media (max-width: 560px) { .dice-result { font-size: 0.9rem; } }
 
 /* ===== 底部個人資料 ===== */
 .player-bar {
@@ -417,6 +426,27 @@
 
 .outcome-table { background: var(--surface); border-radius: var(--radius-sm); }
 .outcome-table th[scope="row"] { font-weight: 700; }
+/* 手機：四欄表格放不下，改成每列兩行「項目　變化／之前 → 之後」 */
+@media (max-width: 560px) {
+  .outcome-table thead { display: none; }
+  .outcome-table, .outcome-table tbody { display: block; }
+  .outcome-table tr {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 2px 6px;
+    align-items: baseline;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .outcome-table tr:last-child { border-bottom: 0; }
+  .outcome-table th, .outcome-table td { padding: 0; border: 0; white-space: normal; text-align: left; }
+  .outcome-table th[scope="row"] { grid-column: 1 / 3; grid-row: 1; }
+  .outcome-table td:nth-child(4) { grid-column: 3; grid-row: 1; text-align: right; font-weight: 900; white-space: nowrap; }
+  .outcome-table td:nth-child(2), .outcome-table td:nth-child(3) { grid-row: 2; font-size: 0.85rem; color: var(--text-muted); white-space: nowrap; }
+  .outcome-table td:nth-child(2) { grid-column: 1; }
+  .outcome-table td:nth-child(3) { grid-column: 2 / -1; }
+  .outcome-table td:nth-child(3)::before { content: '→ '; }
+}
 .info-grid dd.info-sub { font-size: 0.75rem; font-weight: 500; color: var(--text-muted); }
 .info-grid dd.info-sub.neg { color: var(--danger); font-weight: 700; }
 
@@ -570,6 +600,19 @@
 .chat-form input { flex: 1; min-width: 0; min-height: 44px; padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; }
 .chat-meta { margin: 0; font-size: 0.8rem; color: var(--text-muted); }
 @media (prefers-reduced-motion: reduce) { .chat-msg.typing .dots { animation: none; } }
+/* 手機：對話區吃滿剩餘高度；建議問題改成一列可橫向滑動；底部按鈕並排成一列 */
+@media (max-width: 560px) {
+  dialog.agent-chat { height: min(86vh, 720px); height: min(86dvh, 720px); max-height: none; }
+  .agent-chat .modal-body { padding: 12px 14px; gap: 8px; overflow: hidden; }
+  .agent-chat .chat-log { flex: 1 1 auto; min-height: 0; max-height: none; }
+  .agent-chat .chat-msg { max-width: 94%; padding: 8px 12px; }
+  .chat-suggest { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; -webkit-overflow-scrolling: touch; }
+  .chat-suggest .btn { flex: 0 0 auto; white-space: nowrap; }
+  .chat-rec { grid-template-columns: 1fr; }
+  .chat-rec-actions { grid-column: 1; grid-row: auto; justify-content: flex-start; }
+  .agent-chat .modal-actions { flex-wrap: nowrap; gap: 6px; padding: 8px 14px 14px; }
+  .agent-chat .modal-actions .btn { flex: 1 1 0; min-width: 0; padding-inline: 6px; font-size: 0.9rem; white-space: nowrap; }
+}
 
 /* ===== 電腦版右側欄：常駐顯示股票、保險、最近事件 ===== */
 .side-panel { display: none; }
@@ -628,3 +671,67 @@
 .seminar-opt[aria-pressed="true"] { border-color: var(--card-color); box-shadow: inset 0 0 0 1px var(--card-color); background: color-mix(in srgb, var(--card-color) 22%, transparent); font-weight: 900; }
 .seminar-review { margin: 8px 0 12px; }
 .seminar-review .card-note { margin: 0; }
+
+/* ===== 新手教學：聚光燈導覽（js/tutorial.js） ===== */
+dialog.tutorial {
+  position: fixed;
+  inset: 0;
+  width: 100vw; height: 100vh; height: 100dvh;
+  max-width: none; max-height: none;
+  margin: 0; padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  overflow: hidden;
+}
+dialog.tutorial::backdrop { background: transparent; }
+/* 用超大陰影把目標以外的區域壓暗 */
+.tut-hole {
+  position: absolute;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 0 0 3px var(--primary), 0 0 0 200vmax rgba(0, 20, 10, 0.62);
+  transition: left 0.25s ease, top 0.25s ease, width 0.25s ease, height 0.25s ease;
+  pointer-events: none;
+}
+.tutorial.no-target .tut-hole { left: 50%; top: 50%; width: 0; height: 0; box-shadow: 0 0 0 200vmax rgba(0, 20, 10, 0.62); }
+.tut-card {
+  position: absolute;
+  width: min(400px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  display: flex;
+  flex-direction: column;
+  padding: 14px 18px 14px;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow), var(--glow);
+  transition: left 0.25s ease, top 0.25s ease;
+}
+:root[data-theme="dark"] .tut-card { background: #06140d; }
+.tut-card[data-place="center"] { left: 50% !important; top: 50% !important; transform: translate(-50%, -50%); }
+.tut-card[data-place="overlay"] { left: 50% !important; top: auto !important; bottom: 16px; transform: translateX(-50%); max-height: 60dvh; }
+.tut-progress { height: 4px; margin: -4px -6px 10px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+.tut-progress span { display: block; height: 100%; background: var(--primary); transition: width 0.25s ease; }
+.tut-step { margin: 0; font-size: 0.8rem; font-weight: 700; color: var(--text-muted); }
+.tut-title { display: flex; align-items: center; gap: 8px; margin: 2px 0 8px; font-size: 1.2rem; }
+.tut-icon { font-size: 1.4rem; }
+.tut-body { overflow-y: auto; min-height: 0; flex: 1 1 auto; line-height: 1.7; font-size: 0.95rem; }
+.tut-body p { margin: 0 0 8px; }
+.tut-body ul, .tut-body ol { margin: 0 0 8px; padding-left: 1.2em; }
+.tut-body li { margin-bottom: 4px; }
+.tut-note { color: var(--text-muted); font-size: 0.85rem; }
+.tut-stages { list-style: none; padding: 0 !important; display: grid; gap: 6px; }
+.tut-stages li { display: flex; align-items: baseline; gap: 8px; margin: 0; }
+.tut-badge { flex: 0 0 auto; padding: 1px 10px; border-radius: 999px; background: var(--c); color: var(--on-stage); font-weight: 900; font-size: 0.85rem; }
+:root[data-theme="dark"] .tut-badge { color: #03140b; }
+.tut-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+.tut-pair > div { padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); }
+.tut-pair p { margin: 4px 0 0; font-size: 0.9rem; line-height: 1.6; }
+.tut-ends { list-style: none; padding: 0 !important; display: grid; gap: 6px; }
+.tut-ends li { display: grid; grid-template-columns: auto 1fr; gap: 8px; margin: 0; }
+.tut-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
+.tut-nav { display: flex; gap: 8px; }
+.tut-skip { border-color: transparent; color: var(--text-muted); padding-inline: 8px; }
+@media (max-width: 420px) { .tut-pair { grid-template-columns: 1fr; } }
+:root[data-motion="reduce"] .tut-hole, :root[data-motion="reduce"] .tut-card, :root[data-motion="reduce"] .tut-progress span { transition: none; }
+@media (prefers-reduced-motion: reduce) { .tut-hole, .tut-card, .tut-progress span { transition: none; } }

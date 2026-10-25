@@ -14,8 +14,10 @@
     while (state.paused) await UI.wait(120);
   }
 
-  async function rollDice() {
+  // onRoll(n)：點數一決定就呼叫（動畫之前），用來預先抽牌
+  async function rollDice(onRoll) {
     const n = 1 + Math.floor(Math.random() * 6);
+    onRoll?.(n);
     const face = $('#dice-face');
     if (!UI.reducedMotion()) {
       diceBtn.classList.add('rolling');
@@ -94,6 +96,13 @@
 
   const stepDelay = () => (UI.reducedMotion() ? 60 : 220);
 
+  // 往前 n 格會停在機會／命運格時，先向伺服器抽牌（經過起點換階段時用新階段的牌組）
+  function prefetchAhead(n) {
+    const pos = state.position + n;
+    const lap = state.lap + Math.floor(pos / E.tilesPerLap);
+    TileEvents.prefetch(D.board[pos % E.tilesPerLap], D.stages[stageIndexForLap(lap)].id, G.ctx);
+  }
+
   async function runTile(tile) {
     await waitIfPaused();
     await (TileEvents[tile.type] || TileEvents.default)(tile, G.ctx);
@@ -109,7 +118,7 @@
     payMonth(lost > 0);
     addHistory('life', '🛏️', `住院休養，暫停移動 1 回合${lost ? `，少領 1 個月薪水（${UI.fmtMoney(lost)}）` : ''}`);
     G.renderStatus();
-    announce(`住院休養中，暫停移動・1 個月收支 ${UI.fmtSigned(state.cash - before)}`);
+    announce('🛏️ 住院休養，暫停移動', state.cash - before);
     const due = G.marketTick(E.monthsPerStep);
     await UI.alert({ title: '🛏️ 住院休養中', message: `這回合暫停移動。${lost ? '無法上班，這個月沒有薪水。' : '退休金照常入帳。'}`, okText: '繼續' });
     await G.showStory(due);
@@ -117,13 +126,13 @@
   }
 
   async function moveTurn() {
-    const n = await rollDice();
-    announce(`擲出 ${n} 點`);
+    const n = await rollDice(prefetchAhead);
+    announce(`🎲 ${n} 點`);
     const before = state.cash;
     for (let i = 0; i < n; i++) await stepOnce(stepDelay());
     G.ensureTokenVisible();
     const tile = G.currentTile();
-    announce(`擲出 ${n} 點，來到「${tile.name}」・${n * E.monthsPerStep} 個月收支 ${UI.fmtSigned(state.cash - before)}`);
+    announce(`🎲 ${n} 點 → ${tile.name}`, state.cash - before);
     await G.showStory(G.marketTick(n * E.monthsPerStep));
     await runTile(tile);
     return n * E.monthsPerStep;
@@ -208,5 +217,5 @@
 
   diceBtn.addEventListener('click', turn);
 
-  Object.assign(G, { setDiceEnabled, rollDice, stepOnce, stepDelay, runTile });
+  Object.assign(G, { setDiceEnabled, rollDice, stepOnce, stepDelay, prefetchAhead, runTile });
 })(window.Game);

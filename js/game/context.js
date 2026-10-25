@@ -70,9 +70,10 @@
     rollDice: () => G.rollDice(),
     // 貴人相助：往前走 n 格（照常過月份），再執行停留格的事件
     async moveForward(n) {
+      G.prefetchAhead(n);
       for (let i = 0; i < n; i++) await G.stepOnce(G.stepDelay());
       G.ensureTokenVisible();
-      announce(`前進 ${n} 格，來到「${G.currentTile().name}」`);
+      announce(`前進 ${n} 格 → ${G.currentTile().name}`);
       await G.runTile(G.currentTile());
     },
   };

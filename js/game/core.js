@@ -132,8 +132,20 @@
     toast: UI.toast,
   });
 
-  function announce(msg) {
-    $('#dice-result').textContent = msg;
+  // 骰子下方的結果：msg 為移動結果；delta 有值時在後面加上「收支 ±金額」（兩段各自不斷行，畫面窄時只在兩段之間換行）
+  function announce(msg, delta) {
+    const el = $('#dice-result');
+    el.textContent = '';
+    if (!msg) return;
+    const text = document.createElement('span');
+    text.className = 'dr-text';
+    text.textContent = msg;
+    el.append(text);
+    if (delta == null) return;
+    const cash = document.createElement('span');
+    cash.className = 'dr-cash ' + (delta >= 0 ? 'pos' : 'neg');
+    cash.textContent = `收支 ${UI.fmtSigned(delta)}`;
+    el.append(' ', cash);
   }
 
   const G = {

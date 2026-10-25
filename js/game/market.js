@@ -229,8 +229,21 @@
     renderStocks();
     G.renderStatus();
     // 重新渲染後把焦點放回同一顆按鈕
-    const again = $(`[data-${btn.dataset.buy ? 'buy' : 'sell'}="${id}"]`);
+    const again = $(`#stock-body [data-${btn.dataset.buy ? 'buy' : 'sell'}="${id}"]`);
     (again && !again.disabled ? again : $(`#qty-${id}`)).focus();
+  });
+
+  // 電腦版右側欄的買賣（js/game/panels.js 的 renderSide）
+  $('#side-stock').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-buy],[data-sell]');
+    if (!btn || state.over) return;
+    const id = btn.dataset.buy || btn.dataset.sell;
+    const qty = Math.floor(Number($(`#side-qty-${id}`).value));
+    if (!qty || qty < 1) { UI.toast('請輸入正確的股數'); return; }
+    if (btn.dataset.buy) buy(id, qty); else sell(id, qty);
+    G.renderStatus();
+    const again = $(`#side-stock [data-${btn.dataset.buy ? 'buy' : 'sell'}="${id}"]`);
+    (again && !again.disabled ? again : $(`#side-qty-${id}`)).focus();
   });
 
   $('#btn-stock').addEventListener('click', () => { renderStocks(); $('#dlg-stock').showModal(); });

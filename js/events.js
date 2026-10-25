@@ -36,6 +36,17 @@
       </div>`;
   }
 
+  // 預先抽牌：擲出點數就知道會停在哪一格，趁棋子移動時先向伺服器抽牌，停下時就不用等
+  let prefetched = null; // { kind, promise }
+  function prefetch(kind, stage, ctx) {
+    prefetched = null;
+    const gameId = ctx.gameId();
+    if (!gameId || (kind !== 'chance' && kind !== 'fate')) return;
+    const promise = API.draw(gameId, kind, stage);
+    promise.catch(() => {}); // 錯誤留到 drawCard 再處理
+    prefetched = { kind, promise };
+  }
+
   // 抽牌；無法抽時以提示訊息帶過並回傳 null
   async function drawCard(kind, ctx) {
     const gameId = ctx.gameId();
@@ -43,8 +54,10 @@
       UI.toast('未連線事件資料庫，本格略過');
       return null;
     }
+    const pre = prefetched?.kind === kind ? prefetched.promise : null;
+    prefetched = null;
     try {
-      const card = await API.draw(gameId, kind, ctx.stageId());
+      const card = await (pre || API.draw(gameId, kind, ctx.stageId()));
       if (!card) UI.toast(`這個階段的${KIND_LABEL[kind]}牌已全部抽過`);
       return card;
     } catch (e) {
@@ -88,7 +101,7 @@
     const rows = [];
     if (card.cash) rows.push(['💰 現金', UI.fmtMoney(before.cash), UI.fmtMoney(after.cash), UI.fmtSigned(card.cash), card.cash > 0]);
     if (card.netIncome) {
-      rows.push(['📅 每月淨收入變化', `${UI.fmtSigned(before.netIncomeAdj)}/月`, `${UI.fmtSigned(after.netIncomeAdj)}/月`,
+      rows.push(['📅 每月淨收入',`${UI.fmtSigned(before.netIncomeAdj)}/月`, `${UI.fmtSigned(after.netIncomeAdj)}/月`,
         `${UI.fmtSigned(card.netIncome)}/月`, card.netIncome > 0]);
     }
     if (card.health) {
@@ -256,7 +269,7 @@
         </div>
         <div class="modal-actions">
           <button class="btn btn-ghost" type="button" data-mine>🗂️ 我的保單</button>
-          <button class="btn btn-ghost" type="button" data-list>看業務員帶來的險種清單</button>
+          <button class="btn btn-ghost" type="button" data-list>📋 險種清單</button>
           <button class="btn btn-primary" type="button" data-done>結束對話</button>
         </div>`;
       const log = dlg.querySelector('.chat-log');
@@ -747,6 +760,7 @@
 
   window.TileEvents = {
     start: async () => {}, // 停在起點不觸發事件
+    prefetch, // 不是格子，擲骰後先抽好停留格的牌
     chance,
     fate,
     insurance,

@@ -37,46 +37,53 @@
     renderSide();
   }
 
-  // ===== 電腦版右側欄 =====
+  // ===== 電腦版右側欄：股票（可直接買賣，可收合） =====
   // 與 css/game.css 的側欄斷點一致
   const SIDE_QUERY = '(min-width: 1100px)';
   function renderSide() {
     if (!window.matchMedia(SIDE_QUERY).matches) return;
-    // 股票
+    const box = $('#side-stock');
+    // 重新渲染時保留玩家輸入中的股數
+    const qty = {};
+    box.querySelectorAll('input[data-side-qty]').forEach((el) => { qty[el.dataset.sideQty] = el.value; });
     const value = stockValue();
     const cost = Object.values(state.holdings).reduce((s, h) => s + h.cost, 0);
-    $('#side-stock').innerHTML = `
-      <p class="side-sum"><span>市值 ${UI.fmtMoney(value)}</span>${cost ? `<span class="${value - cost >= 0 ? 'up' : 'down'}">未實現 ${UI.fmtSigned(value - cost)}</span>` : ''}</p>
+    box.innerHTML = `
+      <p class="side-sum"><span>現金 ${UI.fmtMoney(state.cash)}</span><span>市值 ${UI.fmtMoney(value)}</span>${cost ? `<span class="${value - cost >= 0 ? 'up' : 'down'}">未實現 ${UI.fmtSigned(value - cost)}</span>` : ''}</p>
       <ul class="side-list">${state.market.map((s) => {
         const h = state.holdings[s.id];
         const chg = s.price / s.prev - 1;
         const pnl = h ? h.shares * s.price - h.cost : 0;
+        const inputId = `side-qty-${s.id}`;
         return `
           <li class="side-stock">
             <span class="ss-name">${UI.escape(s.name)}</span>
             <span class="ss-price">${s.price.toFixed(2)}<small class="${chg >= 0 ? 'up' : 'down'}">${chg >= 0 ? '▲' : '▼'}${UI.fmtPct(chg)}</small></span>
             ${h ? `<span class="ss-hold">${h.shares.toLocaleString('zh-TW')} 股・均價 ${(h.cost / h.shares).toFixed(2)}</span>
             <span class="ss-pnl ${pnl >= 0 ? 'up' : 'down'}">${UI.fmtSigned(pnl)}（${UI.fmtPct(pnl / h.cost)}）</span>` : ''}
+            <span class="ss-trade">
+              <label class="sr-only" for="${inputId}">${UI.escape(s.name)} 交易股數</label>
+              <input type="number" id="${inputId}" data-side-qty="${s.id}" min="1" step="1" value="${UI.escape(qty[s.id] || '100')}" inputmode="numeric">
+              <button class="btn btn-sm btn-primary" type="button" data-buy="${s.id}" ${state.over ? 'disabled' : ''}>買進</button>
+              <button class="btn btn-sm btn-ghost" type="button" data-sell="${s.id}" ${state.over || !h ? 'disabled' : ''}>賣出</button>
+            </span>
           </li>`;
       }).join('')}</ul>`;
-    // 保險
-    const active = state.policies.filter((p) => p.status === 'active');
-    const premium = Ins.monthlyPremium();
-    $('#side-policy').innerHTML = `
-      <p class="side-sum"><span>每月保費 ${UI.fmtMoney(premium)}</span><span class="${premium > job.salary * D.insurance.budgetRate ? 'neg' : ''}">月薪的 ${Math.round((premium / job.salary) * 100)}%</span></p>
-      ${active.length ? `<ul class="side-list">${active.map((p) => `
-        <li class="side-policy"><span>${Insurance.PRODUCTS[p.id].icon} ${UI.escape(p.name)}</span><span class="sp-status">${UI.escape(Ins.statusText(p))}</span></li>`).join('')}</ul>`
-        : '<p class="empty">目前沒有有效保單</p>'}`;
-    // 最近事件
-    const recent = state.history.slice(-8).reverse();
-    $('#side-history').innerHTML = recent.length
-      ? recent.map((h) => `<li><span aria-hidden="true">${h.icon}</span><span>${UI.escape(h.text)}</span><span class="e-meta">第 ${h.turn} 回合・${h.age} 歲</span></li>`).join('')
-      : '<li class="empty">目前沒有事件</li>';
   }
   window.matchMedia(SIDE_QUERY).addEventListener('change', () => { renderSide(); G.refit(); });
-  // 側欄的「交易／管理／全部」沿用右上角按鈕開啟完整視窗
-  document.querySelectorAll('[data-side-open]').forEach((btn) => {
-    btn.addEventListener('click', () => document.getElementById(btn.dataset.sideOpen).click());
+
+  // 收合狀態記在本機，下次進遊戲沿用
+  function setSideCollapsed(collapsed) {
+    document.body.classList.toggle('side-collapsed', collapsed);
+    $('#btn-side-toggle').setAttribute('aria-expanded', String(!collapsed));
+    $('#side-toggle-text').textContent = collapsed ? '展開股票' : '收合';
+    $('#side-body').inert = collapsed;
+    Store.set('sideCollapsed', collapsed);
+  }
+  setSideCollapsed(Store.get('sideCollapsed', false));
+  $('#btn-side-toggle').addEventListener('click', () => {
+    setSideCollapsed(!document.body.classList.contains('side-collapsed'));
+    G.refit();
   });
 
   // ===== 底部個人資料面板 =====
@@ -187,11 +194,15 @@
   $('#btn-pause').addEventListener('click', async () => {
     if (state.over) return;
     state.paused = true;
-    await UI.modal({
+    const choice = await UI.modal({
       title: '遊戲暫停',
       body: pauseBody(),
-      actions: [{ label: '繼續遊戲', value: 'ok', variant: 'primary' }],
+      actions: [
+        { label: '重看新手教學', value: 'tutorial', variant: 'ghost' },
+        { label: '繼續遊戲', value: 'ok', variant: 'primary' },
+      ],
     });
+    if (choice === 'tutorial') await Tutorial.run();
     state.paused = false;
   });
 

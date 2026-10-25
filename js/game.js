@@ -47,11 +47,13 @@
   }
 
   // 向伺服器建立本局，之後的抽牌都以此 id 避免重複
+  // 這台裝置第一次遊玩時先播新手教學，再顯示保險現況；連線失敗的提示等開場視窗都結束後才出現
   G.setDiceEnabled(false);
-  const starting = showStartingPolicies();
+  const starting = Tutorial.maybeRun().then(showStartingPolicies);
   API.createGame(job.id)
     .then((id) => { state.gameId = id; })
     .catch(async () => {
+      await starting;
       await UI.alert({
         title: '無法連線遊戲伺服器',
         message: '機會與命運牌、AI 評分與全服排名都需要伺服器。目前仍可遊玩，但抽不到牌，結算也會改用本機評分。',
