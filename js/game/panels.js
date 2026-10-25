@@ -85,6 +85,10 @@
     setSideCollapsed(!document.body.classList.contains('side-collapsed'));
     G.refit();
   });
+  // 側欄寬度動畫結束後再對齊一次地圖
+  document.body.addEventListener('transitionend', (e) => {
+    if (e.target === document.body && e.propertyName === 'grid-template-columns') G.refit();
+  });
 
   // ===== 底部個人資料面板 =====
   const sheet = $('#sheet');

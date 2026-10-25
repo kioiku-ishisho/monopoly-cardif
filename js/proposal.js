@@ -43,10 +43,10 @@
     const totalPaid = rows.length ? rows[rows.length - 1].total : 0;
     const today = new Date().toLocaleDateString('zh-TW');
 
-    document.title = `人生富翁｜${prod.name}建議書`;
+    document.title = `現實人生｜${prod.name}建議書`;
     paper.innerHTML = `
       <header class="doc-head">
-        <p class="doc-brand">人生富翁人壽（遊戲示意）</p>
+        <p class="doc-brand">現實人生人壽（遊戲示意）</p>
         <h1>${prod.icon} ${UI.escape(prod.name)} 建議書</h1>
       </header>
 
@@ -99,7 +99,7 @@
       </section>
 
       <footer class="doc-foot">
-        <p>本建議書為「人生富翁」遊戲中的示意試算，非真實保險商品，金額單位為新台幣元。</p>
+        <p>本建議書為「現實人生」遊戲中的示意試算，非真實保險商品，金額單位為新台幣元。</p>
         <p>實際保險商品內容以保單條款為準；購買前請確認自己的需求、保障範圍與除外責任。試算日：${today}</p>
       </footer>`;
   }

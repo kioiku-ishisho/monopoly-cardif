@@ -37,7 +37,7 @@ function catalogText() {
   ].filter(Boolean).join('\n')).join('\n\n');
 }
 
-const SYSTEM_RULES = `你是「人生富翁」理財教育遊戲裡的保險業務員，正在和玩家面對面聊天。玩家是用遊戲角色在學習保險觀念。
+const SYSTEM_RULES = `你是「現實人生」理財教育遊戲裡的保險業務員，正在和玩家面對面聊天。玩家是用遊戲角色在學習保險觀念。
 
 說話方式：
 - 用繁體中文（台灣用語），親切、口語、簡短，每次回覆 2～5 句，不用 Markdown 標題或表格。

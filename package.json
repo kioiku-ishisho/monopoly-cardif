@@ -2,7 +2,7 @@
   "name": "monopoly-cardif",
   "private": true,
   "type": "module",
-  "description": "人生富翁：Vercel 靜態網頁 + Serverless API（Firestore、Claude）",
+  "description": "現實人生：Vercel 靜態網頁 + Serverless API（Firestore、Claude）",
   "engines": {
     "node": ">=20"
   },
