@@ -3,6 +3,7 @@
   "functions": {
     "api/evaluate.js": { "maxDuration": 120, "includeFiles": "js/score.js" },
     "api/agent.js": { "maxDuration": 60, "includeFiles": "js/data.js" },
+    "api/advisor.js": { "maxDuration": 60 },
     "api/games/[id]/draw.js": { "includeFiles": "js/data.js" }
   }
 }

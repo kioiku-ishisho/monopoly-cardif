@@ -77,6 +77,7 @@ vercel env add FIREBASE_SERVICE_ACCOUNT
 | `CLAUDE_MODEL` | `claude-haiku-5-5` | AI 評分使用的模型 |
 | `EVAL_DAILY_LIMIT` | `20` | 每位玩家每天最多 AI 評分幾局（控制 API 費用） |
 | `AGENT_DAILY_LIMIT` | `60` | 每位玩家每天最多和 AI 保險業務員對話幾則 |
+| `ADVISOR_DAILY_LIMIT` | `40` | 每位玩家每天最多問階段結束時的 AI 理專幾則 |
 
 ---
 
@@ -88,6 +89,7 @@ vercel env add FIREBASE_SERVICE_ACCOUNT
 | POST | `/api/games/:id/draw` | `{kind: "chance"\|"fate", stage}` → `{card}`；該階段抽完回傳 404 `exhausted` |
 | POST | `/api/games/:id/draws/:cardId` | `{accepted}`，記錄機會牌的選擇 |
 | POST | `/api/agent` | `{gameId, playerId, context, messages}` → `{reply, recommendations}`，AI 保險業務員對話 |
+| POST | `/api/advisor` | `{gameId, playerId, context, messages}` → `{reply}`，階段結束時的 AI 理專問答 |
 | POST | `/api/evaluate` | `{gameId, playerId, record}` → `{evaluation, rank}`，Claude 評分並寫入排行榜 |
 | GET | `/api/leaderboard?playerId=` | `{top, me}`：全服前 20 名（不含玩家 id，只標示自己）與自己的名次 |
 
@@ -138,7 +140,7 @@ vercel env add FIREBASE_SERVICE_ACCOUNT
 - 一圈 60 格 = 5 年，一格 = 1 個月；三個人生階段共用同一圈，每走一格自動領薪並扣生活費
 - 青年 25–40 歲（3 圈）→ 中年 40–65 歲（5 圈）→ 老年 65 歲以上
 - 中年收入 ×1.3；老年改領退休金（月薪 70%，隨物價調整）；青年、中年每圈健康自然恢復（+5、+3），老年每圈 −2；幸福每圈 −3～−4，存款不到 3 個月生活費再 −6
-- 每個人生階段結束（40、65 歲）與遊戲結束時，顯示「人生階段報告」：保單、資產配置、健康幸福與緊急預備金、本階段理賠與最大支出
+- 每個人生階段結束（40、65 歲）與遊戲結束時，顯示「階段結算與檢討」（模板見 `js/review.js`），分三個分頁：**結算**（階段初／末成績單、保單、資產配置、健康幸福與緊急預備金）、**檢討**（依階段的檢核項目給 ✅⚠️❌ 與 A–D 等第、本階段理賠與最大支出）、**理專建議**（依未達成項目給建議與下一階段重點，可問理專最多 6 題；連得上伺服器時由 `/api/advisor` 的 Claude 回答，離線時常見問題改用模板回答）。遊戲結束時沒有理專分頁
 - **平衡模擬**：`node scripts/simulate.mjs` 用「不做規劃」與「有做規劃」兩種策略各跑 2,000 局，統計失敗率（破產、幸福歸零、75 歲前健康歸零）。目前數值：不做規劃約 50%、有做規劃約 13%。調參數可用 `--set economy.inflation=0.01` 試算
 - **幸福指數**（0–100，起始 70）約等於心理健康：人際、休閒、壓力、悲傷等事件牌增減幸福，運動、飲食、疾病、受傷等增減健康（共 242 張牌由健康改為幸福，對照表在 `docs/幸福指數對照表.md`，由 `scripts/happiness-cards.mjs` 產生）
 - **職業風險**：`js/data.js` 的 `jobs[].risk` 調整事件機率，例如外送員意外 ×2、工程師心血管 ×1.3、心理壓力 ×1.4；命運牌在伺服器端依此加權抽牌，重大疾病的發生率也會套用
@@ -201,11 +203,13 @@ api/                    Vercel Serverless Functions
   games/[id]/draw.js    抽牌（交易保證不重複）
   games/[id]/draws/[cardId].js  記錄機會牌選擇
   agent.js              AI 保險業務員對話（推薦以 tool use 回傳）
+  advisor.js            階段結束時的 AI 理專問答
   _lib/catalog.js       讓伺服器讀取 js/data.js 的險種資料
   evaluate.js           Claude 評分 + 排行榜
 scripts/import-cards.mjs  事件牌匯入 Firestore（解析共用 scripts/lib/cards.mjs）
 scripts/simulate.mjs    遊戲平衡模擬（無畫面版的回合流程）
 js/score.js             計分標準（本機評分與伺服器評分共用）
+js/review.js            人生階段結算與檢討的模板（檢核項目、理專建議、常見問答）
 docs/event-cards.md     事件牌清單原稿
 firestore.rules         Firestore 安全規則（全部拒絕瀏覽器存取）
 vercel.json             Function 設定（評分最長 120 秒）

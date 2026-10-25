@@ -520,6 +520,37 @@
 .report-grid dd.report-hint { font-weight: 500; font-size: 0.8rem; color: var(--text-muted); }
 .report-list { margin: 0; padding-left: 1.3em; }
 
+/* 階段報告分頁：結算／檢討／理專建議 */
+.report-tabs { display: flex; gap: 4px; margin: 0 0 14px; border-bottom: 2px solid var(--border); overflow-x: auto; overflow-y: hidden; }
+.report-tab { flex: 0 0 auto; min-height: 44px; padding: 8px 14px; border: 0; border-bottom: 3px solid transparent; margin-bottom: -2px; background: none; color: var(--text-muted); font: inherit; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.report-tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--primary); }
+.report-tab:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.report-pane > .report-h:first-child { margin-top: 0; }
+@media (max-width: 560px) { .report-tab { flex: 1 0 auto; padding: 8px 6px; font-size: 0.9rem; } }
+
+.review-grade { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--surface-2); --grade: #2f9e44; }
+.review-grade[data-grade="B"] { --grade: #1c7ed6; }
+.review-grade[data-grade="C"] { --grade: #e67700; }
+.review-grade[data-grade="D"] { --grade: var(--danger); }
+.review-grade strong { flex: 0 0 auto; display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; border: 3px solid var(--grade); color: var(--grade); font-size: 1.6rem; font-weight: 900; }
+.review-grade p { margin: 0; font-weight: 700; }
+.review-checks, .advisor-advice { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.review-checks li { display: flex; gap: 10px; align-items: flex-start; padding: 8px 12px; border-radius: var(--radius-sm); background: var(--surface-2); border-left: 4px solid #2f9e44; }
+.review-checks li[data-level="warn"], .advisor-advice li[data-level="warn"] { border-left-color: #e67700; }
+.review-checks li[data-level="bad"], .advisor-advice li[data-level="bad"] { border-left-color: var(--danger); }
+.review-checks p, .advisor-advice p { margin: 2px 0 0; font-size: 0.9rem; color: var(--text-muted); }
+.review-icon { flex: 0 0 auto; line-height: 1.5; }
+
+.advisor-intro { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+.advisor-intro > span { font-size: 1.8rem; }
+.advisor-intro p { margin: 0; font-weight: 700; }
+.advisor-advice { counter-reset: adv; }
+.advisor-advice li { counter-increment: adv; padding: 8px 12px; border-radius: var(--radius-sm); background: var(--surface-2); border-left: 4px solid #2f9e44; }
+.advisor-advice li strong::before { content: counter(adv) '. '; }
+.stage-report .advisor-log { max-height: min(36vh, 320px); margin-bottom: 8px; }
+.stage-report .chat-form { margin-top: 8px; }
+.stage-report .chat-meta { margin-top: 4px; }
+
 /* ===== AI 保險業務員對話 ===== */
 .agent-chat .modal-body { display: flex; flex-direction: column; gap: 10px; }
 .chat-log { list-style: none; margin: 0; padding: 4px; display: flex; flex-direction: column; gap: 10px; max-height: min(46vh, 420px); overflow-y: auto; }
