@@ -23,9 +23,17 @@
   --shadow: 0 6px 18px rgba(0, 70, 40, 0.12);
   --shadow-sm: 0 2px 6px rgba(0, 70, 40, 0.1);
   --glow: none;
-  --radius: 10px;
-  --radius-sm: 6px;
-  --btn-radius: 4px;
+  --radius: 0;
+  --radius-sm: 0;
+  --btn-radius: 0;
+  --line: #1a1a1a; /* 框線：1px 細線／2px 主要 */
+  --scrim: rgba(0, 20, 10, 0.35);
+  --happy: #f08c00;
+  /* 職業配色預設值，實際值由 UI.applyJobTheme 依職業寫入 */
+  --job-light: #b6dc76;
+  --job-dark: #442b48;
+  --job-btn: #442b48;
+  --job-btn-text: #dbff76;
   --header-bg: #ffffff;
   --header-fg: #1c2a23;
   --header-line: var(--brand);
@@ -62,9 +70,7 @@
   --shadow: 0 0 0 1px rgba(61, 220, 132, 0.15), 0 10px 30px rgba(0, 0, 0, 0.6);
   --shadow-sm: 0 0 12px rgba(61, 220, 132, 0.18);
   --glow: 0 0 18px rgba(61, 220, 132, 0.45);
-  --radius: 16px;
-  --radius-sm: 10px;
-  --btn-radius: 10px;
+  --line: #e6fff0;
   --header-bg: #000000;
   --header-fg: #e6fff0;
   --header-line: rgba(61, 220, 132, 0.6);
@@ -106,6 +112,7 @@
   --header-bg: #000000;
   --header-fg: #ffffff;
   --header-line: #ffffff;
+  --line: #ffffff;
   --page-bg: #000000;
   --grid-line: #333333;
   --youth: #4dd2ff;
@@ -120,6 +127,8 @@
 
 /* ===== 基礎 ===== */
 *, *::before, *::after { box-sizing: border-box; }
+/* 設計規範：全站直角 */
+*, *::before, *::after, ::backdrop { border-radius: 0 !important; }
 html { font-size: calc(16px * var(--fs)); -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
@@ -135,6 +144,8 @@ h1, h2, h3 { line-height: 1.3; margin: 0; }
 p { margin: 0 0 0.75em; }
 button, input, select { font: inherit; color: inherit; }
 img, svg { display: block; }
+/* 取代 emoji 的線條圖示（UI.icon），大小與顏色跟著文字 */
+svg.ico { display: inline-block; width: 1em; height: 1em; vertical-align: -0.15em; flex: none; }
 [hidden] { display: none !important; }
 
 :focus-visible {

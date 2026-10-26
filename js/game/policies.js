@@ -68,11 +68,10 @@
       UI.toast(`已解約${p.name}`);
     }
     G.renderStatus();
-    if (G.isSheetOpen()) G.renderSheet();
-    if ($('#dlg-policy').open) renderPolicyDialog();
+    if ($('#dlg-policy').open) renderPolicy($('#policy-dlg-body'));
   }
-  $('#sheet-body').addEventListener('click', onPolicyAction);
   $('#policy-body').addEventListener('click', onPolicyAction);
+  $('#policy-dlg-body').addEventListener('click', onPolicyAction);
 
   // ===== 保險視窗：已投保保單與可投保險種，商品內容一律看建議書 =====
   // 建議書（可列印成 PDF）：依目前年齡、職業、健康加費試算
@@ -98,10 +97,11 @@
     </tr>`;
   }
 
-  function renderPolicyDialog() {
+  // 右側「保險」分頁（預設）或保險業務員格疊開的保險視窗
+  function renderPolicy(box = $('#policy-body')) {
     const cfg = D.insurance;
     const perk = G.perkText();
-    $('#policy-body').innerHTML = `
+    box.innerHTML = `
       ${perk ? `<p class="policy-perk">${UI.escape(perk)}</p>` : ''}
       <p class="policy-total">每月保費合計 <strong>${UI.fmtMoney(Ins.monthlyPremium())}</strong>
         ・建議上限（月薪 ${Math.round(cfg.budgetRate * 100)}%）${UI.fmtMoney(job.salary * cfg.budgetRate)}</p>
@@ -117,13 +117,11 @@
 
   // 疊在目前的視窗上開啟「我的保單」，關閉時 resolve（保險業務員格使用）
   function showMyPolicies() {
-    renderPolicyDialog();
+    renderPolicy($('#policy-dlg-body'));
     const dlg = $('#dlg-policy');
     dlg.showModal();
     return new Promise((resolve) => dlg.addEventListener('close', resolve, { once: true }));
   }
 
-  $('#btn-policy').addEventListener('click', () => { renderPolicyDialog(); $('#dlg-policy').showModal(); });
-
-  Object.assign(G, { policyTable, openProposal, showMyPolicies });
+  Object.assign(G, { policyTable, openProposal, showMyPolicies, renderPolicy: () => renderPolicy() });
 })(window.Game);

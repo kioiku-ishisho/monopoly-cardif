@@ -1,19 +1,20 @@
 /* 遊戲靜態資料：職業、人生階段、地圖格子、股票、提示。數值皆為暫定，可直接調整。 */
 (function () {
+  // light／dark／btn／btnText：職業配色（首頁背景、標題與職業名、主按鈕、按鈕文字），由 UI.applyJobTheme 套到 CSS 變數
   // risk：職業對事件發生機率的倍率（未列出的為 1）
   //   accident 意外、hospital 一般住院、heart 心血管（心肌梗塞、腦中風）、mental 心理壓力（降低幸福的命運牌）
   //   命運牌在伺服器端依此加權抽牌（api/games/[id]/draw.js 的 drawWeight），重大疾病在 js/game.js 套用
   const jobs = [
-    { id: 'engineer', name: '軟體工程師', icon: '👩‍💻', color: '#4c6ef5', salary: 58000, expense: 32000, desc: '收入高、工時長，要多留意健康。', risk: { accident: 0.7, heart: 1.3, mental: 1.4 } },
-    { id: 'teacher', name: '國小老師', icon: '👨‍🏫', color: '#2b8a3e', salary: 46000, expense: 28000, desc: '收入穩定，退休制度完善。', risk: {} },
-    { id: 'nurse', name: '護理師', icon: '👩‍⚕️', color: '#c2255c', salary: 50000, expense: 29000, desc: '輪班辛苦，健康管理很重要。', risk: { hospital: 1.2, heart: 1.2, mental: 1.3 } },
-    { id: 'sales', name: '業務專員', icon: '🧑‍💼', color: '#e67700', salary: 42000, expense: 30000, desc: '底薪普通，獎金變動大。', risk: { accident: 1.2, mental: 1.2 } },
-    { id: 'chef', name: '廚師', icon: '👨‍🍳', color: '#d9480f', salary: 38000, expense: 26000, desc: '靠手藝吃飯，未來有機會創業。', risk: { accident: 1.5 } },
-    { id: 'designer', name: '平面設計師', icon: '🧑‍🎨', color: '#7048e8', salary: 40000, expense: 27000, desc: '接案收入不固定，需要預備金。', risk: { mental: 1.1 } },
-    { id: 'civil', name: '公務員', icon: '🧑‍💼', color: '#1971c2', salary: 45000, expense: 27000, desc: '鐵飯碗，收入成長慢但穩定。', risk: {} },
-    { id: 'farmer', name: '農夫', icon: '🧑‍🌾', color: '#5c940d', salary: 35000, expense: 22000, desc: '看天吃飯，生活開銷較低。', risk: { accident: 1.5 } },
-    { id: 'courier', name: '外送員', icon: '🛵', color: '#0c8599', salary: 36000, expense: 25000, desc: '時間彈性，但缺乏保障。', risk: { accident: 2 } },
-    { id: 'doctor', name: '醫師', icon: '🧑‍⚕️', color: '#087f5b', salary: 120000, expense: 60000, desc: '高收入也高壓力，生活開銷高。', risk: { hospital: 1.2, heart: 1.2, mental: 1.3 } },
+    { id: 'engineer', name: '軟體工程師', icon: '👩‍💻', color: '#4c6ef5', light: '#b6dc76', dark: '#442b48', btn: '#442b48', btnText: '#dbff76', salary: 58000, expense: 32000, desc: '收入高、工時長，要多留意健康。', risk: { accident: 0.7, heart: 1.3, mental: 1.4 } },
+    { id: 'teacher', name: '國小老師', icon: '👨‍🏫', color: '#2b8a3e', light: '#f2c57c', dark: '#426a5a', btn: '#426a5a', btnText: '#f2c57c', salary: 46000, expense: 28000, desc: '收入穩定，退休制度完善。', risk: {} },
+    { id: 'nurse', name: '護理師', icon: '👩‍⚕️', color: '#c2255c', light: '#cad2c5', dark: '#2f3e46', btn: '#52796f', btnText: '#ffffff', salary: 50000, expense: 29000, desc: '輪班辛苦，健康管理很重要。', risk: { hospital: 1.2, heart: 1.2, mental: 1.3 } },
+    { id: 'sales', name: '業務專員', icon: '🧑‍💼', color: '#e67700', light: '#e5e5e5', dark: '#14213d', btn: '#fca311', btnText: '#000000', salary: 42000, expense: 30000, desc: '底薪普通，獎金變動大。', risk: { accident: 1.2, mental: 1.2 } },
+    { id: 'chef', name: '廚師', icon: '👨‍🍳', color: '#d9480f', light: '#f2d398', dark: '#000000', btn: '#de1a1a', btnText: '#ffffff', salary: 38000, expense: 26000, desc: '靠手藝吃飯，未來有機會創業。', risk: { accident: 1.5 } },
+    { id: 'designer', name: '平面設計師', icon: '🧑‍🎨', color: '#7048e8', light: '#76bed0', dark: '#000000', btn: '#f55d3e', btnText: '#000000', salary: 40000, expense: 27000, desc: '接案收入不固定，需要預備金。', risk: { mental: 1.1 } },
+    { id: 'civil', name: '公務員', icon: '🪪', color: '#1971c2', light: '#dddddd', dark: '#1f271b', btn: '#0b4f6c', btnText: '#ffffff', salary: 45000, expense: 27000, desc: '鐵飯碗，收入成長慢但穩定。', risk: {} },
+    { id: 'farmer', name: '農夫', icon: '🧑‍🌾', color: '#5c940d', light: '#a6c48a', dark: '#000000', btn: '#ffba59', btnText: '#000000', salary: 35000, expense: 22000, desc: '看天吃飯，生活開銷較低。', risk: { accident: 1.5 } },
+    { id: 'courier', name: '外送員', icon: '🛵', color: '#0c8599', light: '#f0eff4', dark: '#3d2645', btn: '#832161', btnText: '#ffffff', salary: 36000, expense: 25000, desc: '時間彈性，但缺乏保障。', risk: { accident: 2 } },
+    { id: 'doctor', name: '醫師', icon: '🧑‍⚕️', color: '#087f5b', light: '#b9d6f2', dark: '#061a40', btn: '#0353a4', btnText: '#ffffff', salary: 120000, expense: 60000, desc: '高收入也高壓力，生活開銷高。', risk: { hospital: 1.2, heart: 1.2, mental: 1.3 } },
   ];
 
   // 一張命運牌對某職業的抽牌權重

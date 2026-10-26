@@ -23,18 +23,31 @@
   <h1 class="sr-only">現實人生 遊戲畫面</h1>
 
   <header class="game-top">
-    <div class="top-group top-left">
-      <button class="pill-btn" type="button" id="btn-pause" data-icon="pause"><span class="pill-text">暫停</span></button>
-    </div>
-    <p class="stage-chip" id="stage-chip" aria-live="polite"></p>
-    <div class="top-group top-right">
-      <button class="pill-btn" type="button" id="btn-policy" data-icon="shield"><span class="pill-text">保險</span></button>
-      <button class="pill-btn" type="button" id="btn-stock" data-icon="chart"><span class="pill-text">股票</span></button>
-      <button class="pill-btn" type="button" id="btn-history" data-icon="news"><span class="pill-text">歷史事件</span></button>
+    <button class="pause-btn" type="button" id="btn-pause" data-icon="pause" aria-label="暫停"></button>
+    <!-- 上列狀態列：現金／健康／幸福只顯示在這裡，「個人」分頁不重複 -->
+    <div class="status-bar" id="status-bar" role="group" aria-label="目前狀態">
+      <p class="stage-chip" id="stage-chip" aria-live="polite"></p>
+      <p class="stat stat-cash">
+        <span class="stat-label">現金</span>
+        <strong class="stat-value" id="sum-cash"></strong>
+      </p>
+      <p class="stat-row">
+        <span class="stat stat-meter">
+          <span class="stat-label">健康</span>
+          <span class="stat-value" id="sum-health"></span>
+          <span class="meter" id="sum-health-meter" aria-hidden="true"><span></span></span>
+        </span>
+        <span class="stat stat-meter">
+          <span class="stat-label">幸福</span>
+          <span class="stat-value" id="sum-happiness"></span>
+          <span class="meter happy" id="sum-happiness-meter" aria-hidden="true"><span></span></span>
+        </span>
+      </p>
     </div>
   </header>
 
-  <main class="game-main">
+  <div class="game-sub">
+    <p class="perk-chip" id="perk-chip" role="status" hidden></p>
     <!-- 最新一次市場波動，一直顯示到下一回合更新 -->
     <button class="market-ticker" type="button" id="market-ticker" aria-describedby="market-ticker-hint">
       <span class="ticker-icon" id="ticker-icon" aria-hidden="true">🏦</span>
@@ -42,7 +55,10 @@
       <span class="ticker-meta" id="ticker-meta"></span>
     </button>
     <span class="sr-only" id="market-ticker-hint">開啟市場波動紀錄</span>
-    <p class="perk-chip" id="perk-chip" role="status" hidden></p>
+  </div>
+
+  <main class="game-main">
+    <!-- 地圖與棋子：新版棋盤與角色圖尚未設計，先沿用現有地圖 -->
     <div class="board-viewport" id="board-viewport" tabindex="0" role="region"
          aria-roledescription="地圖" aria-label="大富翁地圖" aria-describedby="map-help">
       <div class="board" id="board">
@@ -59,93 +75,58 @@
       <button class="icon-btn solid" type="button" id="btn-zoom-me" data-icon="target" aria-label="以我的位置為中心"></button>
       <button class="icon-btn solid" type="button" id="btn-zoom-all" data-icon="layers" aria-label="顯示整圈"></button>
     </div>
-
-    <div class="dice-area">
-      <button class="dice-btn" type="button" id="btn-dice" aria-describedby="dice-result">
-        <span class="dice-face" id="dice-face" aria-hidden="true">🎲</span>
-        <span class="dice-label">擲骰子</span>
-      </button>
-      <p class="dice-result" id="dice-result" aria-live="polite"></p>
-    </div>
   </main>
 
-  <!-- 電腦版右側欄：常駐股票，可直接買賣，可向右收合（窄螢幕隱藏，改用右上按鈕） -->
-  <aside class="side-panel" id="side-panel" aria-labelledby="side-stock-title">
-    <button class="side-toggle" type="button" id="btn-side-toggle" aria-expanded="true" aria-controls="side-body">
-      <span class="side-toggle-icon" data-icon="chevronRight"></span>
-      <span class="side-toggle-text" id="side-toggle-text">收合</span>
+  <div class="dice-area">
+    <p class="dice-result" id="dice-result" aria-live="polite"></p>
+    <button class="dice-btn" type="button" id="btn-dice" aria-describedby="dice-result">
+      <span class="dice-face" id="dice-face" aria-hidden="true">🎲</span>
+      <span class="dice-label">擲骰子</span>
     </button>
-    <div class="side-body" id="side-body">
-      <div class="side-head">
-        <h2 id="side-stock-title">📈 股票</h2>
-      </div>
-      <div id="side-stock"></div>
+  </div>
+
+  <!-- 右側面板：電腦版常駐（上方分頁列）；手機為右緣直立分頁＋抽屜（js/game/panels.js） -->
+  <aside class="side-panel" id="side-panel" aria-label="遊戲資訊">
+    <div class="tab-list" role="tablist" aria-label="遊戲資訊分頁">
+      <button class="tab" type="button" role="tab" id="btn-policy" data-tab="insurance" aria-controls="panel-insurance" aria-selected="false">保險</button>
+      <button class="tab" type="button" role="tab" id="btn-stock" data-tab="stock" aria-controls="panel-stock" aria-selected="false">股票</button>
+      <button class="tab" type="button" role="tab" id="btn-history" data-tab="history" aria-controls="panel-history" aria-selected="false">歷史</button>
+      <button class="tab" type="button" role="tab" id="btn-personal" data-tab="personal" aria-controls="panel-personal" aria-selected="true">個人</button>
+    </div>
+    <div class="tab-panels" id="tab-panels">
+      <section class="tab-panel" id="panel-insurance" role="tabpanel" aria-labelledby="btn-policy" hidden>
+        <h2 class="panel-title">保險</h2>
+        <div id="policy-body"></div>
+      </section>
+      <section class="tab-panel" id="panel-stock" role="tabpanel" aria-labelledby="btn-stock" hidden>
+        <h2 class="panel-title">股票</h2>
+        <div id="stock-body"></div>
+      </section>
+      <section class="tab-panel" id="panel-history" role="tabpanel" aria-labelledby="btn-history" hidden>
+        <h2 class="panel-title">歷史事件</h2>
+        <div class="tabs" role="group" aria-label="篩選事件">
+          <button class="btn btn-sm btn-ghost" type="button" data-filter="all" aria-pressed="true">全部</button>
+          <button class="btn btn-sm btn-ghost" type="button" data-filter="market" aria-pressed="false">市場波動</button>
+          <button class="btn btn-sm btn-ghost" type="button" data-filter="life" aria-pressed="false">人生事件</button>
+        </div>
+        <ol class="event-list" id="event-list"></ol>
+      </section>
+      <section class="tab-panel" id="panel-personal" role="tabpanel" aria-labelledby="btn-personal">
+        <h2 class="panel-title">個人</h2>
+        <div id="personal-body"></div>
+      </section>
     </div>
   </aside>
+  <div class="drawer-scrim" id="drawer-scrim" hidden></div>
 
-  <footer class="player-bar">
-    <button class="player-summary" type="button" id="btn-sheet" aria-expanded="false" aria-controls="sheet">
-      <span class="stat">
-        <span class="stat-label">現金</span>
-        <span class="stat-value" id="sum-cash"></span>
-      </span>
-      <span class="stat">
-        <span class="stat-label">健康指數</span>
-        <span class="stat-value" id="sum-health"></span>
-        <span class="meter" id="sum-health-meter" aria-hidden="true"><span></span></span>
-      </span>
-      <span class="stat">
-        <span class="stat-label">幸福指數</span>
-        <span class="stat-value" id="sum-happiness"></span>
-        <span class="meter happy" id="sum-happiness-meter" aria-hidden="true"><span></span></span>
-      </span>
-      <span class="sheet-hint" data-icon="chevronUp"><span class="sr-only">展開個人資料</span></span>
-    </button>
-  </footer>
-
-  <div class="sheet-scrim" id="sheet-scrim" hidden></div>
-  <section class="sheet" id="sheet" aria-labelledby="sheet-title" inert>
-    <div class="sheet-handle" aria-hidden="true"></div>
-    <div class="sheet-head">
-      <h2 id="sheet-title">個人資料</h2>
-      <button class="icon-btn" type="button" id="btn-sheet-close" data-icon="close" aria-label="收合個人資料"></button>
-    </div>
-    <div class="sheet-body" id="sheet-body"></div>
-  </section>
-
-  <!-- 股票 -->
-  <dialog class="modal modal-wide" id="dlg-stock" aria-labelledby="dlg-stock-title">
-    <div class="modal-head">
-      <h2 id="dlg-stock-title">股票市場</h2>
-      <button class="icon-btn" type="button" data-close data-icon="close" aria-label="關閉"></button>
-    </div>
-    <div class="modal-body" id="stock-body"></div>
-  </dialog>
-
-  <!-- 保單與保險規則 -->
+  <!-- 保單與保險規則：保險業務員格疊在對話視窗上開啟（平時用右側「保險」分頁） -->
   <dialog class="modal modal-wide" id="dlg-policy" aria-labelledby="dlg-policy-title">
     <div class="modal-head">
       <h2 id="dlg-policy-title">保險</h2>
       <button class="icon-btn" type="button" data-close data-icon="close" aria-label="關閉"></button>
     </div>
     <div class="modal-body">
-      <div id="policy-body"></div>
-    </div>
-  </dialog>
-
-  <!-- 歷史事件 -->
-  <dialog class="modal" id="dlg-history" aria-labelledby="dlg-history-title">
-    <div class="modal-head">
-      <h2 id="dlg-history-title">歷史事件</h2>
-      <button class="icon-btn" type="button" data-close data-icon="close" aria-label="關閉"></button>
-    </div>
-    <div class="modal-body">
-      <div class="tabs" role="group" aria-label="篩選事件">
-        <button class="btn btn-sm btn-ghost" type="button" data-filter="all" aria-pressed="true">全部</button>
-        <button class="btn btn-sm btn-ghost" type="button" data-filter="market" aria-pressed="false">市場波動</button>
-        <button class="btn btn-sm btn-ghost" type="button" data-filter="life" aria-pressed="false">人生事件</button>
-      </div>
-      <ol class="event-list" id="event-list"></ol>
+      <div id="policy-dlg-body"></div>
     </div>
   </dialog>
 

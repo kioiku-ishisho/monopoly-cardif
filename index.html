@@ -7,7 +7,7 @@
   <title>現實人生｜選擇你的職業</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kaisei+Decol&family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
   <script>
     try {
       var s = JSON.parse(localStorage.getItem('lf.settings') || '{}');
@@ -22,42 +22,48 @@
 <body class="page-index">
   <a class="skip-link" href="#main">跳到主要內容</a>
 
-  <header class="topbar">
-    <p class="brand" aria-hidden="true"><span class="brand-mark">現</span><span class="brand-text">現實人生</span></p>
-    <nav class="top-actions" aria-label="主選單">
-      <button class="icon-btn solid" type="button" data-open="dlg-howto" data-icon="help" aria-label="如何遊玩"></button>
-      <button class="icon-btn solid" type="button" data-open="dlg-history" data-icon="history" aria-label="歷史遊玩紀錄"></button>
-      <button class="icon-btn solid" type="button" data-open="dlg-tips" data-icon="bulb" aria-label="歷史取得提示"></button>
-      <button class="icon-btn solid" type="button" id="btn-leaderboard" data-icon="trophy" aria-label="全服排行榜"></button>
-      <button class="icon-btn solid" type="button" data-open="dlg-settings" data-icon="gear" aria-label="設定"></button>
-    </nav>
-  </header>
-
   <main id="main" class="hero">
-    <h1 class="hero-title"><span class="hero-eyebrow" aria-hidden="true" lang="en">LIFE × MONEY</span>現實人生<span class="hero-sub">一場關於金錢與人生的冒險</span></h1>
+    <!-- 滿版角色圖：依職業換圖（assets/jobs/<jobId>.png），圖檔尚未提供，先只顯示職業底色 -->
+    <div class="hero-art" id="hero-art" aria-hidden="true"></div>
 
-    <section class="character-card" aria-labelledby="job-label">
-      <p id="job-label" class="sr-only">你的角色</p>
-      <div class="avatar-wrap">
-        <div class="avatar" id="avatar" aria-hidden="true"></div>
+    <div class="hero-main">
+      <h1 class="hero-title">現實人生</h1>
+      <div class="hero-actions">
+        <button class="hero-btn hero-start" type="button" id="btn-start">開始遊玩</button>
+        <button class="hero-btn hero-menu" type="button" data-open="dlg-menu" aria-label="選單">
+          <span class="menu-text" aria-hidden="true">選單</span>
+          <span class="menu-icon" data-icon="menu" aria-hidden="true"></span>
+        </button>
       </div>
+    </div>
 
-      <div class="job-row">
+    <section class="job-card" aria-labelledby="job-name">
+      <div class="job-info">
         <h2 class="job-name" id="job-name"></h2>
-        <button class="icon-btn solid" type="button" id="btn-reroll" data-icon="shuffle" aria-label="隨機更換職業"></button>
+        <p class="job-salary">月薪 <span id="job-salary"></span></p>
       </div>
-      <p class="job-desc" id="job-desc"></p>
-
-      <dl class="salary">
-        <dt>月薪</dt>
-        <dd id="job-salary"></dd>
-      </dl>
-
-      <button class="btn btn-primary btn-lg start-btn" type="button" id="btn-start">開始遊玩</button>
+      <button class="job-reroll" type="button" id="btn-reroll" data-icon="shuffle" aria-label="更換職業"></button>
     </section>
 
     <p class="sr-only" aria-live="polite" id="job-live"></p>
   </main>
+
+  <!-- 選單 -->
+  <dialog class="modal" id="dlg-menu" aria-labelledby="dlg-menu-title">
+    <div class="modal-head">
+      <h2 id="dlg-menu-title">選單</h2>
+      <button class="icon-btn" type="button" data-close data-icon="close" aria-label="關閉"></button>
+    </div>
+    <div class="modal-body">
+      <ul class="menu-list">
+        <li><button class="menu-item" type="button" data-menu="dlg-howto" data-icon="help">如何遊玩</button></li>
+        <li><button class="menu-item" type="button" data-menu="dlg-history" data-icon="history">歷史遊玩紀錄</button></li>
+        <li><button class="menu-item" type="button" data-menu="dlg-tips" data-icon="bulb">歷史取得提示</button></li>
+        <li><button class="menu-item" type="button" id="btn-leaderboard" data-icon="trophy">全服排行榜</button></li>
+        <li><button class="menu-item" type="button" data-menu="dlg-settings" data-icon="gear">設定</button></li>
+      </ul>
+    </div>
+  </dialog>
 
   <!-- 如何遊玩 -->
   <dialog class="modal" id="dlg-howto" aria-labelledby="dlg-howto-title">
@@ -73,7 +79,7 @@
           <ul>
             <li>❓ <strong>機會</strong>：抽一張機會牌，可以選擇接受或放棄。</li>
             <li>🎴 <strong>命運</strong>：抽一張命運牌，抽到就一定會發生。</li>
-            <li>🛡️ <strong>保險業務員</strong>：可以和 AI 業務員聊天、詢問保險問題，按推薦的按鈕直接投保。也可以隨時在右上角 <strong>保險</strong> 自己閱讀條款、看建議書並投保。越早投保越便宜，但保費會每月扣款。</li>
+            <li>🛡️ <strong>保險業務員</strong>：可以和 AI 業務員聊天、詢問保險問題，按推薦的按鈕直接投保。也可以隨時在右側 <strong>保險</strong> 分頁 自己閱讀條款、看建議書並投保。越早投保越便宜，但保費會每月扣款。</li>
             <li>🏥 <strong>住院</strong>：擲骰決定住院天數、支付醫療費，下回合暫停移動；有醫療險可以理賠。</li>
             <li>⭐ <strong>特殊格</strong>：保單健檢、理財講座、觀念挑戰、貴人相助、保險優惠等 7 種，有些要回答保險知識題。</li>
             <li>☕ <strong>休息</strong>：什麼事都沒發生。</li>
@@ -81,7 +87,7 @@
           同一局遊戲中，不會抽到重複的機會或命運牌。
         </li>
         <li>一圈 60 格，代表 <strong>5 年</strong>，三個人生階段走同一圈。青年（25–40 歲）走完 3 圈後進入 <strong>中年</strong>（40–65 歲），再走 5 圈進入 <strong>老年</strong>（65 歲以上）。</li>
-        <li>每走一格（1 個月）會自動領薪水並支付生活費；也可以在右上角 <strong>股票</strong> 買賣投資。</li>
+        <li>每走一格（1 個月）會自動領薪水並支付生活費；也可以在右側 <strong>股票</strong> 分頁 買賣投資。</li>
         <li><strong>現金歸零（破產）</strong> 或 <strong>健康指數歸零</strong> 時遊戲結束，AI 會為你的人生評分並給予建議。</li>
       </ol>
       <p><strong>小技巧：</strong>地圖可以拖曳、雙指或滑鼠滾輪縮放；用鍵盤時，先聚焦地圖，再用方向鍵移動、「+」「−」縮放。</p>

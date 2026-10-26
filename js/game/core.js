@@ -113,8 +113,7 @@
 
   function addHistory(kind, icon, text) {
     state.history.push({ kind, icon, text, age: ageInt(), turn: state.turn });
-    if ($('#dlg-history').open) G.renderHistory();
-    G.renderSide();
+    G.renderPanel();
   }
 
   function logDecision(text, category = 'other') {

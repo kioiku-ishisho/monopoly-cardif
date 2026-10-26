@@ -38,8 +38,8 @@
           <p class="card-text">你的保單類型是「<strong>${tier.name}</strong>」。</p>
           ${policies.length
             ? `<p>父母過去替你買了 ${policies.length} 張保單，已經繳清，不用再繳保費：</p><ul>${list}</ul>
-               <p class="card-note">這些舊保單保障偏低，可以在右上角「保險」查看，或之後自己補強。</p>`
-            : '<p class="card-note">你目前沒有任何保單。可以在右上角「保險」閱讀各險種條款並投保，或等保險業務員來介紹。</p>'}
+               <p class="card-note">這些舊保單保障偏低，可以在右側「保險」分頁查看，或之後自己補強。</p>`
+            : '<p class="card-note">你目前沒有任何保單。可以在右側「保險」分頁閱讀各險種條款並投保，或等保險業務員來介紹。</p>'}
         </div>`,
       okText: '開始人生',
       dismissible: false,

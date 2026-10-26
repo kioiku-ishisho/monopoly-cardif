@@ -1,47 +1,102 @@
+/* 版面：上列（暫停＋狀態列）／市場訊息／地圖／擲骰子；電腦版右側常駐分頁欄 */
 .page-game {
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-areas: "top" "sub" "main" "dice";
   --stage: var(--youth);
+  --drawer-w: min(292px, calc(100vw - 110px));
 }
 .page-game[data-stage="middle"] { --stage: var(--middle); }
 .page-game[data-stage="elder"] { --stage: var(--elder); }
 
-/* ===== 頂部 ===== */
-/* 三格：左（暫停、離開）／中（階段與年齡）／右（保險、股票、歷史事件） */
+/* ===== 上列：暫停＋狀態列（現金／健康／幸福） ===== */
 .game-top {
+  grid-area: top;
+  position: relative;
+  z-index: 42; /* 手機抽屜打開時仍在遮罩之上 */
+  display: flex;
+  align-items: flex-start;
+  gap: 22px;
+  padding: max(27px, env(safe-area-inset-top)) 20px 0;
+}
+.pause-btn {
+  flex: none;
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  gap: 8px;
-  padding: max(10px, env(safe-area-inset-top)) 12px 10px;
-  z-index: 20;
+  place-items: center;
+  width: 49px;
+  height: 59px;
+  margin-top: 5px;
+  padding: 0;
+  border: 2px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
 }
-.top-group { display: flex; gap: 8px; }
-.top-left { justify-self: start; }
-.top-right { justify-self: end; }
-.stage-chip {
-  margin: 0;
-  padding: 6px 14px;
-  border-radius: 999px;
-  background: var(--stage);
-  color: var(--on-stage);
-  font-weight: 900;
-  white-space: nowrap;
-  box-shadow: var(--shadow-sm);
-}
-:root[data-contrast="high"] .stage-chip { color: #000; }
+.pause-btn:hover { background: var(--surface-2); }
+.pause-btn svg { width: 26px; height: 26px; }
 
-@media (max-width: 560px) {
-  .pill-btn { padding: 8px 10px; }
-  .pill-btn .pill-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-  .stage-chip { font-size: 0.85rem; padding: 4px 10px; }
+.status-bar {
+  flex: 1;
+  min-width: 0;
+  /* 手機兩行：階段標籤＋現金／健康＋幸福 */
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-content: center;
+  gap: 4px 8px;
+  min-height: 64px;
+  padding: 4px 12px;
+  border: 2px solid var(--line);
+  background: var(--surface);
+  font-size: 1rem;
+}
+.status-bar p { margin: 0; }
+.stage-chip {
+  padding: 0 8px;
+  background: var(--job-btn);
+  color: var(--job-btn-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.stat { display: flex; align-items: center; gap: 8px; white-space: nowrap; min-width: 0; }
+.stat-cash { justify-content: space-between; }
+.stat-value { font-weight: 700; }
+.stat-row { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; }
+.stat-meter { flex: 1; }
+.stat-meter .stat-value { font-weight: 400; }
+.status-bar .meter {
+  flex: 1;
+  height: 9px;
+  border: 1px solid var(--line);
+  background: transparent;
+}
+.meter.happy > span { background: var(--happy); }
+
+/* ===== 市場訊息 ===== */
+.game-sub {
+  grid-area: sub;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 25px 52px 0 20px;
+  min-width: 0;
 }
 
 /* ===== 地圖 ===== */
-.game-main { position: relative; min-height: 0; }
+.game-main { grid-area: main; position: relative; min-height: 0; }
+/* 手機：地圖鋪滿整個畫面、放在最底層；其他元件疊在上面，空白處不擋地圖拖曳 */
+@media (max-width: 1023px) {
+  .game-main { position: fixed; inset: 0; z-index: 0; }
+  .game-sub, .dice-area { position: relative; z-index: 10; }
+  .game-top, .game-sub, .dice-area { pointer-events: none; }
+  .game-top > *, .game-sub > *, .dice-area > * { pointer-events: auto; }
+  .map-controls { bottom: max(18px, env(safe-area-inset-bottom)); }
+}
 .board-viewport {
   position: absolute;
   inset: 0;
@@ -168,20 +223,16 @@
 
 /* 下次投保優惠／加價提示 */
 .perk-chip {
-  position: absolute;
-  top: 62px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 15;
-  max-width: calc(100% - 24px);
-  margin: 0;
-  padding: 4px 12px;
-  border-radius: 999px;
+  min-width: 0;
+  margin: 0 auto 0 0;
+  padding: 2px 10px;
   background: var(--surface);
-  border: 2px solid #0ca678;
-  font-size: 0.85rem;
+  border: 1px solid #0ca678;
+  font-size: 0.8rem;
   font-weight: 700;
-  box-shadow: var(--shadow-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .card-kind { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-weight: 900; }
 .card-job { margin-left: 8px; padding: 2px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); font-size: 0.8rem; font-weight: 700; }
@@ -225,41 +276,34 @@
 
 /* ===== 骰子 ===== */
 .dice-area {
-  position: absolute;
-  left: 50%;
-  bottom: 18px;
-  transform: translateX(-50%);
+  grid-area: dice;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  z-index: 10;
-  pointer-events: none;
-  /* 寬度由內容決定；left: 50% 時預設最多只有半個畫面寬，結果文字會被擠成好幾行 */
-  width: max-content;
-  max-width: calc(100vw - 140px); /* 兩側留給右下角的地圖按鈕 */
+  padding: 10px 16px max(24px, env(safe-area-inset-bottom));
+  min-width: 0;
 }
 .dice-btn {
-  pointer-events: auto;
-  width: 104px; height: 104px;
-  border-radius: 28px;
-  border: 4px solid var(--surface);
-  background: var(--primary);
-  color: var(--on-primary);
-  box-shadow: 0 8px 0 var(--primary-strong), var(--shadow);
+  width: 126px;
+  height: 103px;
+  border: 2px solid var(--line);
+  background: var(--job-btn);
+  color: var(--job-btn-text);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 2px;
   cursor: pointer;
-  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  transition: transform 0.1s ease, filter 0.15s ease;
 }
-.dice-btn:active:not(:disabled) { transform: translateY(6px); box-shadow: 0 2px 0 var(--primary-strong), var(--shadow); }
+.dice-btn:hover:not(:disabled) { filter: brightness(1.08); }
+.dice-btn:active:not(:disabled) { transform: translateY(2px); }
 .dice-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-.dice-face { font-size: 46px; line-height: 1; }
+.dice-face { font-size: 30px; line-height: 1; }
 .dice-btn.rolling .dice-face { animation: shake 0.12s linear infinite; }
-.dice-label { font-weight: 900; font-size: 0.95rem; }
+.dice-label { font-weight: 600; font-size: 1.25rem; }
 @keyframes shake {
   25% { transform: rotate(-14deg); }
   75% { transform: rotate(14deg); }
@@ -269,97 +313,41 @@
   min-height: 1.6em;
   max-width: 100%;
   padding: 2px 14px;
-  border-radius: 16px;
+  border: 1px solid var(--line);
   background: var(--surface);
   font-weight: 700;
+  font-size: 0.9rem;
   line-height: 1.45;
   text-align: center;
-  box-shadow: var(--shadow-sm);
 }
 .dice-result:empty { visibility: hidden; }
 /* 移動結果與收支各自不斷行，畫面窄時只在兩段之間換行 */
 .dice-result .dr-text, .dice-result .dr-cash { white-space: nowrap; }
-@media (max-width: 560px) { .dice-result { font-size: 0.9rem; } }
 
-/* ===== 底部個人資料 ===== */
-.player-bar {
-  padding: 8px 12px max(10px, env(safe-area-inset-bottom));
-  background: var(--surface);
-  border-top: 2px solid var(--border);
-  z-index: 20;
-}
-.player-summary {
-  width: 100%;
-  display: grid;
-  grid-template-columns: 1.2fr 1fr 1fr auto;
-  align-items: center;
-  gap: 12px;
-  min-height: 56px;
-  padding: 6px 8px;
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  text-align: left;
-}
-.player-summary:hover { background: var(--surface-2); }
-.stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.stat-label { font-size: 0.8rem; color: var(--text-muted); font-weight: 700; }
-.stat-value { font-size: 1.25rem; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.stat .meter { width: 100%; max-width: 160px; }
-.meter.happy > span { background: #f08c00; }
-@media (max-width: 420px) {
-  .player-summary { gap: 8px; }
-  .stat-value { font-size: 1.05rem; }
-}
-.sheet-hint { color: var(--text-muted); }
-
-.sheet-scrim {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 20, 10, 0.5);
-  z-index: 40;
-}
-.sheet {
-  position: fixed;
-  left: 0; right: 0; bottom: 0;
-  margin: 0 auto;
-  max-width: 720px;
-  max-height: 78vh;
-  max-height: 78dvh;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
-  border: 2px solid var(--border);
-  border-bottom: 0;
-  border-radius: 24px 24px 0 0;
-  box-shadow: var(--shadow);
-  z-index: 50;
-  transform: translateY(105%);
-  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
-  padding-bottom: env(safe-area-inset-bottom);
-}
-.sheet.open { transform: translateY(0); }
-.sheet-handle { width: 48px; height: 5px; border-radius: 999px; background: var(--border); margin: 10px auto 0; }
-.sheet-head { display: flex; justify-content: space-between; align-items: center; padding: 6px 12px 6px 22px; }
-.sheet-head h2 { font-size: 1.2rem; }
-.sheet-body { overflow-y: auto; padding: 4px 22px 22px; }
-
-.info-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-  margin: 0 0 18px;
-}
-@media (min-width: 560px) { .info-grid { grid-template-columns: repeat(3, 1fr); } }
-.info-grid div {
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-}
-.info-grid dt { font-size: 0.8rem; color: var(--text-muted); font-weight: 700; }
-.info-grid dd { margin: 0; font-weight: 900; font-size: 1.05rem; }
-.sheet-body h3 { font-size: 1rem; margin: 6px 0 8px; }
+/* ===== 「個人」分頁 ===== */
+.stat-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 0; }
+.stat-cards > div { min-width: 0; padding: 6px; border: 1px solid var(--line); }
+.stat-cards dt { font-size: 0.75rem; color: var(--text-muted); }
+.stat-cards dd { margin: 0; font-size: 0.8125rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-cards .cur { display: none; } /* 手機每月結餘只顯示「+18,400」 */
+.panel-h { margin: 0; font-size: 1em; font-weight: 700; }
+.mini-table { border: 1px solid var(--line); }
+.mini-row { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.mini-row:last-child { border-bottom: 0; }
+.mini-row > span:last-child { text-align: right; }
+.mini-head { font-size: 0.9375em; color: var(--text-muted); border-bottom-color: var(--line); }
+.mini-empty { margin: 0; padding: 8px 10px; font-size: 0.875em; color: var(--text-muted); }
+.policy-list { list-style: none; margin: 0; padding: 10px; border: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+.policy-list.mini-empty { padding: 10px; }
+.policy-list li { display: flex; flex-direction: column; }
+.policy-list li.inactive { color: var(--text-muted); }
+.policy-list small { color: var(--text-muted); font-size: 0.8em; }
+.info-list { margin: 4px 0 0; }
+.info-list > div { display: grid; grid-template-columns: 1fr auto; gap: 0 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.info-list dt { color: var(--text-muted); font-size: 0.9em; }
+.info-list dd { margin: 0; font-weight: 700; text-align: right; }
+.info-list dd.info-sub { grid-column: 1 / -1; font-size: 0.75rem; font-weight: 400; color: var(--text-muted); text-align: left; }
+.info-list dd.info-sub.neg { color: var(--danger); font-weight: 700; }
 
 /* ===== 表格（股票、持股） ===== */
 .table-wrap { overflow-x: auto; }
@@ -418,15 +406,16 @@
 .event-item .e-meta { font-size: 0.8rem; color: var(--text-muted); }
 
 /* 暫停 */
-.pause-body { text-align: center; font-size: 3rem; }
-
-@media (min-width: 768px) {
-  .game-top { padding: 14px 20px; }
-  .stage-chip { font-size: 1.35rem; padding: 8px 22px; }
-  .dice-area { bottom: 28px; }
-  .dice-btn { width: 120px; height: 120px; }
-  .player-bar { padding-inline: 24px; }
-  .player-summary { max-width: 720px; margin: 0 auto; display: grid; }
+.pause-body { display: flex; justify-content: center; }
+.pause-body svg { width: 48px; height: 48px; }
+/* 手機：暫停視窗每一列的選項與按鈕都排成一行，不換行 */
+@media (max-width: 560px) {
+  .modal-pause .modal-body { padding-inline: 16px; }
+  .modal-pause .radio-row { flex-wrap: nowrap; gap: 6px; }
+  .modal-pause .radio-row label { flex: 1 1 auto; justify-content: center; gap: 4px; min-width: 0; padding: 6px 6px; font-size: 0.875rem; white-space: nowrap; }
+  .modal-pause .radio-row input { margin: 0; }
+  .modal-pause .modal-actions { flex-wrap: nowrap; gap: 6px; padding-inline: 16px; }
+  .modal-pause .modal-actions .btn { flex: 1 1 auto; min-width: 0; padding-inline: 6px; font-size: 0.9rem; white-space: nowrap; }
 }
 
 .outcome-table { background: var(--surface); border-radius: var(--radius-sm); }
@@ -452,8 +441,6 @@
   .outcome-table td:nth-child(3) { grid-column: 2 / -1; }
   .outcome-table td:nth-child(3)::before { content: '→ '; }
 }
-.info-grid dd.info-sub { font-size: 0.75rem; font-weight: 500; color: var(--text-muted); }
-.info-grid dd.info-sub.neg { color: var(--danger); font-weight: 700; }
 
 /* ===== 保險 ===== */
 .policy-offers { display: grid; gap: 12px; margin-top: 4px; }
@@ -467,48 +454,37 @@
 .policy-table td { white-space: nowrap; }
 .policy-table tr.inactive td { color: var(--text-muted); }
 .policy-actions { display: flex; gap: 6px; }
-.sheet-body > .e-meta { font-size: 0.8rem; color: var(--text-muted); margin-top: 6px; }
+#policy-body > .e-meta, #policy-dlg-body > .e-meta { font-size: 0.8rem; color: var(--text-muted); margin-top: 6px; }
 
 /* 主題：深色模式的地圖與骰子加上霓虹光暈 */
-:root[data-theme="dark"]:not([data-contrast="high"]) .dice-btn { box-shadow: 0 8px 0 #1e8f52, var(--glow); }
+:root[data-theme="dark"]:not([data-contrast="high"]) .dice-btn { box-shadow: var(--glow); }
 :root[data-theme="dark"]:not([data-contrast="high"]) .tile { background: #06140d; }
-.player-bar { border-top-color: var(--brand); }
-:root[data-theme="dark"]:not([data-contrast="high"]) .sheet { background: #06140d; box-shadow: var(--shadow), var(--glow); }
 
 /* ===== 市場跑馬燈：顯示最近一次市場波動，直到下一回合 ===== */
 .market-ticker {
-  position: absolute;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 15;
+  flex: 0 1 auto;
   display: flex;
   align-items: center;
-  gap: 8px;
-  max-width: min(560px, calc(100% - 24px));
-  min-height: 44px;
-  padding: 6px 14px;
-  border: 2px solid var(--border);
-  border-left: 6px solid var(--text-muted);
-  border-radius: var(--btn-radius);
+  gap: 6px;
+  width: min(173px, 100%);
+  min-width: 0;
+  min-height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
   background: var(--surface);
   color: var(--text);
-  box-shadow: var(--shadow-sm);
-  font-weight: 700;
+  font-size: 0.8125rem;
   text-align: left;
   cursor: pointer;
 }
-.market-ticker[data-trend="up"] { border-left-color: var(--stock-up); }
-.market-ticker[data-trend="down"] { border-left-color: var(--stock-down); }
-.market-ticker.news { border-color: var(--warning); border-left-color: var(--warning); box-shadow: var(--shadow-sm), var(--glow); }
-.ticker-icon { font-size: 1.2rem; flex: none; }
-.ticker-text { flex: 1; min-width: 0; font-size: 0.95rem; }
-.ticker-meta { flex: none; font-size: 0.75rem; color: var(--text-muted); font-weight: 500; }
+.market-ticker:hover { background: var(--surface-2); }
+.market-ticker[data-trend="up"] .ticker-text { color: var(--stock-up); }
+.market-ticker[data-trend="down"] .ticker-text { color: var(--stock-down); }
+.market-ticker.news { border-color: var(--warning); box-shadow: var(--glow); }
+.ticker-icon { flex: none; font-size: 0.9em; }
+.ticker-text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ticker-meta { display: none; flex: none; font-size: 0.75em; color: var(--text-muted); font-weight: 500; }
 :root[data-theme="dark"]:not([data-contrast="high"]) .market-ticker { background: #06140d; }
-@media (max-width: 560px) {
-  .market-ticker { width: calc(100% - 24px); }
-  .ticker-text { font-size: 0.85rem; }
-}
 
 /* ===== 保單與保險規則 ===== */
 .policy-total { padding: 10px 14px; border-radius: var(--radius-sm); background: var(--surface-2); }
@@ -517,7 +493,7 @@
 .policy-perk { margin: 0 0 4px; padding: 8px 12px; border-radius: var(--radius-sm); border: 2px solid #0ca678; font-weight: 700; }
 
 /* 提示訊息放在市場跑馬燈下方，避免蓋住 */
-.page-game .toast-region { top: 132px; }
+.page-game .toast-region { top: 150px; }
 
 /* ===== 人生階段報告 ===== */
 .stage-report .report-h { font-size: 1rem; margin: 18px 0 8px; }
@@ -600,86 +576,157 @@
   .agent-chat .modal-actions .btn { flex: 1 1 0; min-width: 0; padding-inline: 6px; font-size: 0.9rem; white-space: nowrap; }
 }
 
-/* ===== 電腦版右側欄：股票（可買賣、可向右收合） ===== */
-.side-panel { display: none; }
-@media (min-width: 1100px) {
-  .page-game { grid-template-columns: minmax(0, 1fr) 340px; transition: grid-template-columns 0.25s ease; }
-  .page-game.side-collapsed { grid-template-columns: minmax(0, 1fr) 48px; }
-  .game-top { grid-column: 1 / -1; grid-row: 1; }
-  .game-main { grid-column: 1; grid-row: 2; }
-  .player-bar { grid-column: 1; grid-row: 3; }
-  .side-panel {
-    grid-column: 2;
-    grid-row: 2 / 4;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    min-height: 0;
-    min-width: 0;
-    overflow: hidden;
-    padding: 10px 12px 12px;
-    background: var(--surface);
-    border-left: 2px solid var(--border);
-    z-index: 20;
-  }
-  .side-collapsed .side-panel { padding: 10px 4px; }
-  .side-collapsed .side-body { display: none; }
+/* ===== 右側分頁：保險／股票／歷史／個人 ===== */
+/* 手機：右緣直立分頁，點了從右側滑出抽屜；上列狀態列與暫停按鈕留在遮罩之上 */
+.side-panel { display: contents; }
+.tab-list {
+  position: fixed;
+  z-index: 46;
+  top: 167px;
+  right: 0;
+  width: 48px;
+  height: 231px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  padding: 6px 0;
+  border: 2px solid var(--line);
+  border-right: 0;
+  background: var(--surface);
+  transition: right 0.25s ease;
 }
-@media (min-width: 1100px) and (prefers-reduced-motion: reduce) { .page-game { transition: none; } }
-:root[data-motion="reduce"] .page-game, :root[data-motion="reduce"] .side-toggle-icon svg { transition: none; }
-:root[data-theme="dark"]:not([data-contrast="high"]) .side-panel { background: #06140d; }
-.side-toggle {
-  align-self: flex-end;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 36px;
-  padding: 4px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--btn-radius);
-  background: var(--surface-2);
+.tab {
+  display: grid;
+  place-items: center;
+  min-height: 44px;
+  padding: 6px 4px;
+  border: 0;
+  background: transparent;
   color: var(--text);
-  font-weight: 700;
-  font-size: 0.85rem;
+  font-size: 0.9375rem;
   cursor: pointer;
 }
-.side-toggle:hover { color: var(--primary); }
-.side-toggle-icon svg { width: 18px; height: 18px; display: block; transition: transform 0.25s ease; }
-.side-collapsed .side-toggle { align-self: center; flex-direction: column; padding: 8px 4px; }
-.side-collapsed .side-toggle-icon svg { transform: rotate(180deg); }
-.side-collapsed .side-toggle-text { writing-mode: vertical-rl; letter-spacing: 0.15em; }
-.side-body { flex: 1; min-height: 0; overflow-y: auto; }
-.side-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
-.side-head h2 { margin: 0; font-size: 1.1rem; }
-.side-sum { display: flex; flex-wrap: wrap; gap: 2px 12px; margin: 0 0 10px; font-size: 0.85rem; font-weight: 700; }
-.side-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.side-stock {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 2px 8px;
-  font-size: 0.9rem;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-}
-.side-stock .ss-name { font-weight: 700; }
-.side-stock .ss-price { text-align: right; font-weight: 900; }
-.side-stock .ss-price small { margin-left: 4px; font-size: 0.8rem; }
-.side-stock .ss-hold { color: var(--text-muted); font-size: 0.8rem; }
-.side-stock .ss-pnl { text-align: right; font-size: 0.8rem; font-weight: 700; }
-.side-stock .ss-trade { grid-column: 1 / -1; display: flex; gap: 6px; align-items: center; margin-top: 6px; }
-.side-stock input[type="number"] {
-  flex: 1;
-  min-width: 0;
-  min-height: 36px;
-  padding: 4px 8px;
-  border: 2px solid var(--border);
-  border-radius: var(--radius-sm);
+.tab:hover { background: var(--surface-2); }
+.drawer-open .tab-list { right: var(--drawer-w); }
+.drawer-open .tab[aria-selected="true"] { background: var(--line); color: var(--bg); }
+
+.tab-panels {
+  position: fixed;
+  z-index: 45;
+  top: 110px;
+  right: 0;
+  bottom: 0;
+  width: var(--drawer-w);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 18px 14px max(18px, env(safe-area-inset-bottom));
+  border: 2px solid var(--line);
+  border-width: 2px 0 0 2px;
   background: var(--surface);
-  color: var(--text);
+  font-size: 0.9375rem;
+  transform: translateX(100%);
+  visibility: hidden;
+  transition: transform 0.25s ease, visibility 0s linear 0.25s;
 }
-.side-panel .empty { margin: 0; font-size: 0.85rem; color: var(--text-muted); }
+.drawer-open .tab-panels { transform: none; visibility: visible; transition: transform 0.25s ease; }
+.tab-panel { display: flex; flex-direction: column; gap: 10px; }
+.tab-panel[hidden] { display: none; }
+.panel-title { font-size: 1.375rem; font-weight: 700; }
+.tab-panel .tabs { margin-bottom: 0; }
+.drawer-scrim { position: fixed; inset: 0; z-index: 40; background: var(--scrim); }
+:root[data-theme="dark"]:not([data-contrast="high"]) .tab-panels,
+:root[data-theme="dark"]:not([data-contrast="high"]) .tab-list { background: #06140d; }
+:root[data-motion="reduce"] .tab-list, :root[data-motion="reduce"] .tab-panels { transition: none; }
+@media (prefers-reduced-motion: reduce) { .tab-list, .tab-panels { transition: none; } }
+
+/* ===== 電腦版（3a）：右側 350px 常駐欄，上方四等分分頁列 ===== */
+@media (min-width: 1024px) {
+  .page-game {
+    grid-template-columns: minmax(0, 1fr) 350px;
+    grid-template-areas: "top side" "sub side" "main side" "dice side";
+  }
+  .game-top { gap: 34px; padding: 45px 33px 0 47px; }
+  .pause-btn { width: 75px; height: 75px; margin-top: 0; }
+  .pause-btn svg { width: 36px; height: 36px; }
+  .status-bar {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap; /* 窄的電腦螢幕放不下一行時換成兩行 */
+    gap: 4px 16px;
+    max-width: 901px;
+    min-height: 75px;
+    padding: 6px 18px;
+    font-size: clamp(1rem, 1.65vw, 1.5rem);
+  }
+  .stage-chip { padding: 4px 16px; font-size: 1em; }
+  .stat-cash { flex: none; justify-content: flex-start; }
+  .stat-row { display: contents; }
+  .stat-meter { flex: none; }
+  .status-bar .meter { flex: none; width: clamp(48px, 6.25vw, 90px); height: 12px; }
+
+  .game-sub { padding: 37px 33px 0 47px; }
+  .perk-chip { margin-left: 109px; font-size: 0.9rem; padding: 4px 12px; }
+  .market-ticker { width: min(545px, 100%); min-height: 45px; padding: 4px 14px; border-width: 2px; font-size: clamp(1rem, 1.5vw, 1.375rem); }
+  .ticker-meta { display: inline; }
+
+  .game-main { margin: 40px 110px 0; border: 2px solid var(--line); }
+
+  .dice-area { flex-direction: row; justify-content: center; gap: 16px; padding: 30px 16px 40px; }
+  .dice-result { order: 2; max-width: 260px; }
+  .dice-btn { width: 135px; height: 135px; }
+  .dice-face { font-size: 40px; }
+  .dice-label { font-size: 1.75rem; }
+
+  .side-panel {
+    grid-area: side;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
+    border-left: 2px solid var(--line);
+    background: var(--surface);
+  }
+  :root[data-theme="dark"]:not([data-contrast="high"]) .side-panel { background: #06140d; }
+  .tab-list {
+    position: static;
+    flex: none;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    width: auto;
+    height: 84px;
+    padding: 0;
+    border: 0;
+    border-bottom: 2px solid var(--line);
+    background: transparent;
+  }
+  .tab { font-size: 1.5rem; border-right: 1px solid var(--line); }
+  .tab:last-child { border-right: 0; }
+  .tab[aria-selected="true"] { background: var(--line); color: var(--bg); }
+  .tab-panels {
+    position: static;
+    flex: 1;
+    min-height: 0;
+    width: auto;
+    padding: 20px;
+    border: 0;
+    background: transparent;
+    font-size: 1rem;
+    transform: none;
+    visibility: visible;
+    transition: none;
+  }
+  .tab-panel { gap: 14px; }
+  .panel-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .stat-cards { gap: 8px; }
+  .stat-cards > div { padding: 10px; }
+  .stat-cards dt { font-size: 1rem; }
+  .stat-cards dd { font-size: 1.25rem; }
+  .stat-cards .cur { display: inline; }
+  .panel-h { margin-top: 6px; font-size: 1.375rem; }
+  .drawer-scrim { display: none; }
+}
 
 /* 理財講座：文章頁＋問答頁 */
 .modal-seminar .modal-body { scroll-behavior: smooth; }

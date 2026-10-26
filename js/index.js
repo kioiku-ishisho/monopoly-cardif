@@ -7,30 +7,28 @@
   UI.bindDialogs();
 
   // ---- 職業 ----
+  // 開場隨機一個職業，之後按 ⤨ 依序換下一個；整頁配色與角色圖跟著職業
   let current = null;
-
-  function pickJob(excludeId) {
-    const pool = jobs.filter((j) => j.id !== excludeId);
-    return pool[Math.floor(Math.random() * pool.length)];
-  }
 
   function renderJob(job, animate) {
     current = job;
-    const avatar = $('#avatar');
-    avatar.textContent = job.icon;
-    avatar.style.setProperty('--job-color', job.color);
+    UI.applyJobTheme(job);
+    // 角色圖尚未提供，之後放 assets/jobs/<jobId>.png 再打開
+    // $('#hero-art').style.backgroundImage = `url("assets/jobs/${job.id}.png")`;
     $('#job-name').textContent = job.name;
-    $('#job-desc').textContent = job.desc;
     $('#job-salary').textContent = UI.fmtMoney(job.salary);
     if (animate) {
-      avatar.classList.remove('swap');
-      void avatar.offsetWidth; // 重新觸發動畫
-      avatar.classList.add('swap');
+      const btn = $('#btn-reroll');
+      btn.classList.remove('spin');
+      void btn.offsetWidth; // 重新觸發動畫
+      btn.classList.add('spin');
       $('#job-live').textContent = `職業更換為${job.name}，月薪 ${job.salary.toLocaleString('zh-TW')} 元。`;
     }
   }
 
-  $('#btn-reroll').addEventListener('click', () => renderJob(pickJob(current && current.id), true));
+  $('#btn-reroll').addEventListener('click', () => {
+    renderJob(jobs[(jobs.indexOf(current) + 1) % jobs.length], true);
+  });
 
   $('#btn-start').addEventListener('click', () => {
     Store.session.set('newGame', { jobId: current.id, startedAt: Date.now() });
@@ -38,9 +36,20 @@
     location.href = 'game.html';
   });
 
-  renderJob(pickJob(), false);
+  renderJob(jobs[Math.floor(Math.random() * jobs.length)], false);
 
-  $('#btn-leaderboard').addEventListener('click', () => Leaderboard.open());
+  // ---- 選單：關掉選單再開對應的視窗 ----
+  const menu = $('#dlg-menu');
+  document.querySelectorAll('[data-menu]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const dlg = document.getElementById(btn.dataset.menu);
+      menu.close();
+      dlg.dispatchEvent(new CustomEvent('beforeopen'));
+      dlg.showModal();
+    });
+  });
+
+  $('#btn-leaderboard').addEventListener('click', () => { menu.close(); Leaderboard.open(); });
 
   // ---- 歷史遊玩紀錄 ----
   const END_LABEL = { bankrupt: '破產', death: '健康耗盡', unhappy: '幸福歸零', maxAge: '壽終正寢' };

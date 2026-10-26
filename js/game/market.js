@@ -80,8 +80,7 @@
     const text = headline ? `${headline}，市場平均 ${UI.fmtPct(avg)}` : `市場平均${avg >= 0 ? '上漲' : '下跌'} ${UI.fmtPct(avg)}`;
     addHistory('market', due.length ? due[0].icon : avg >= 0 ? '📈' : '📉', text);
     showTicker(due.length ? due[0].icon : news ? '📰' : avg >= 0 ? '📈' : '📉', text, !!headline, avg);
-    if ($('#dlg-stock').open) renderStocks();
-    G.renderSide();
+    G.renderPanel();
     return due;
   }
 
@@ -233,20 +232,5 @@
     (again && !again.disabled ? again : $(`#qty-${id}`)).focus();
   });
 
-  // 電腦版右側欄的買賣（js/game/panels.js 的 renderSide）
-  $('#side-stock').addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-buy],[data-sell]');
-    if (!btn || state.over) return;
-    const id = btn.dataset.buy || btn.dataset.sell;
-    const qty = Math.floor(Number($(`#side-qty-${id}`).value));
-    if (!qty || qty < 1) { UI.toast('請輸入正確的股數'); return; }
-    if (btn.dataset.buy) buy(id, qty); else sell(id, qty);
-    G.renderStatus();
-    const again = $(`#side-stock [data-${btn.dataset.buy ? 'buy' : 'sell'}="${id}"]`);
-    (again && !again.disabled ? again : $(`#side-qty-${id}`)).focus();
-  });
-
-  $('#btn-stock').addEventListener('click', () => { renderStocks(); $('#dlg-stock').showModal(); });
-
-  Object.assign(G, { STORY, buildStory, illnessRate, marketTick, showStory, sell });
+  Object.assign(G, { STORY, buildStory, illnessRate, marketTick, showStory, sell, renderStocks });
 })(window.Game);

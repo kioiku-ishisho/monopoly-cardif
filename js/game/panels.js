@@ -1,4 +1,4 @@
-/* 遊戲主頁：狀態列、電腦版右側欄、底部個人資料、歷史事件、暫停與離開 */
+/* 遊戲主頁：上列狀態列、右側分頁（保險／股票／歷史／個人；手機為抽屜）、歷史事件、暫停與離開 */
 (function (G) {
   if (!G) return;
   const { D, E, $, job, state, stats, Ins, stage, ageInt, priceIndex, salaryNow, expenseNow,
@@ -18,99 +18,110 @@
     $('#stage-chip').textContent = `${stage().name}・${ageInt()} 歲`;
     $('#sum-cash').textContent = UI.fmtMoney(state.cash);
     $('#sum-cash').classList.toggle('neg', state.cash <= 0);
-    $('#sum-health').textContent = `${state.health} / 100`;
+    $('#sum-health').textContent = state.health;
     const meter = $('#sum-health-meter');
     meter.querySelector('span').style.width = state.health + '%';
     meter.classList.toggle('warn', state.health <= 50 && state.health > 25);
     meter.classList.toggle('danger', state.health <= 25);
-    $('#sum-happiness').textContent = `${state.happiness} / 100`;
+    $('#sum-happiness').textContent = state.happiness;
     const hm = $('#sum-happiness-meter');
     hm.querySelector('span').style.width = state.happiness + '%';
     hm.classList.toggle('danger', state.happiness <= 25);
-    // 圈數以「這個階段的第幾圈」顯示
-    const lapsBefore = D.stages.slice(0, state.stageIndex).reduce((sum, s) => sum + s.laps, 0);
-    const lapsTotal = stage().laps === Infinity ? '' : ` / ${stage().laps}`;
-    $('#loop-status').textContent = `目前 ${ageInt()} 歲・第 ${state.lap - lapsBefore + 1}${lapsTotal} 圈`;
+    $('#loop-status').textContent = `目前 ${ageInt()} 歲・${lapText()}`;
     $('#perk-chip').hidden = !perkText();
     $('#perk-chip').textContent = perkText();
-    if (isSheetOpen()) renderSheet();
-    renderSide();
+    renderPanel();
   }
 
-  // ===== 電腦版右側欄：股票（可直接買賣，可收合） =====
-  // 與 css/game.css 的側欄斷點一致
-  const SIDE_QUERY = '(min-width: 1100px)';
-  function renderSide() {
-    if (!window.matchMedia(SIDE_QUERY).matches) return;
-    const box = $('#side-stock');
-    // 重新渲染時保留玩家輸入中的股數
+  // 圈數以「這個階段的第幾圈」顯示
+  function lapText() {
+    const lapsBefore = D.stages.slice(0, state.stageIndex).reduce((sum, s) => sum + s.laps, 0);
+    const lapsTotal = stage().laps === Infinity ? '' : ` / ${stage().laps}`;
+    return `第 ${state.lap - lapsBefore + 1}${lapsTotal} 圈`;
+  }
+
+  // ===== 右側分頁：保險／股票／歷史／個人 =====
+  // 電腦版常駐右欄、點分頁切換內容；手機為右緣直立分頁，點了從右側滑出抽屜（點遮罩或再點同一分頁關閉）
+  // 與 css/game.css 的斷點一致
+  const DESKTOP_QUERY = window.matchMedia('(min-width: 1024px)');
+  const tabs = [...document.querySelectorAll('.tab[data-tab]')];
+  const tabPanels = $('#tab-panels');
+  const scrim = $('#drawer-scrim');
+  let activeTab = 'personal';
+  let drawerOpen = false;
+
+  const isPanelVisible = (tab) => activeTab === tab && (DESKTOP_QUERY.matches || drawerOpen);
+
+  function renderPanel() {
+    if (!DESKTOP_QUERY.matches && !drawerOpen) return;
+    if (activeTab === 'insurance') G.renderPolicy();
+    else if (activeTab === 'stock') renderStockPanel();
+    else if (activeTab === 'history') renderHistory();
+    else renderPersonal();
+  }
+
+  // 重新渲染股票分頁時保留玩家輸入中的股數
+  function renderStockPanel() {
     const qty = {};
-    box.querySelectorAll('input[data-side-qty]').forEach((el) => { qty[el.dataset.sideQty] = el.value; });
-    const value = stockValue();
-    const cost = Object.values(state.holdings).reduce((s, h) => s + h.cost, 0);
-    box.innerHTML = `
-      <p class="side-sum"><span>現金 ${UI.fmtMoney(state.cash)}</span><span>市值 ${UI.fmtMoney(value)}</span>${cost ? `<span class="${value - cost >= 0 ? 'up' : 'down'}">未實現 ${UI.fmtSigned(value - cost)}</span>` : ''}</p>
-      <ul class="side-list">${state.market.map((s) => {
-        const h = state.holdings[s.id];
-        const chg = s.price / s.prev - 1;
-        const pnl = h ? h.shares * s.price - h.cost : 0;
-        const inputId = `side-qty-${s.id}`;
-        return `
-          <li class="side-stock">
-            <span class="ss-name">${UI.escape(s.name)}</span>
-            <span class="ss-price">${s.price.toFixed(2)}<small class="${chg >= 0 ? 'up' : 'down'}">${chg >= 0 ? '▲' : '▼'}${UI.fmtPct(chg)}</small></span>
-            ${h ? `<span class="ss-hold">${h.shares.toLocaleString('zh-TW')} 股・均價 ${(h.cost / h.shares).toFixed(2)}</span>
-            <span class="ss-pnl ${pnl >= 0 ? 'up' : 'down'}">${UI.fmtSigned(pnl)}（${UI.fmtPct(pnl / h.cost)}）</span>` : ''}
-            <span class="ss-trade">
-              <label class="sr-only" for="${inputId}">${UI.escape(s.name)} 交易股數</label>
-              <input type="number" id="${inputId}" data-side-qty="${s.id}" min="1" step="1" value="${UI.escape(qty[s.id] || '100')}" inputmode="numeric">
-              <button class="btn btn-sm btn-primary" type="button" data-buy="${s.id}" ${state.over ? 'disabled' : ''}>買進</button>
-              <button class="btn btn-sm btn-ghost" type="button" data-sell="${s.id}" ${state.over || !h ? 'disabled' : ''}>賣出</button>
-            </span>
-          </li>`;
-      }).join('')}</ul>`;
+    $('#stock-body').querySelectorAll('input[type="number"]').forEach((el) => { qty[el.id] = el.value; });
+    G.renderStocks();
+    Object.entries(qty).forEach(([id, v]) => { const el = document.getElementById(id); if (el) el.value = v; });
   }
-  window.matchMedia(SIDE_QUERY).addEventListener('change', () => { renderSide(); G.refit(); });
 
-  // 收合狀態記在本機，下次進遊戲沿用
-  function setSideCollapsed(collapsed) {
-    document.body.classList.toggle('side-collapsed', collapsed);
-    $('#btn-side-toggle').setAttribute('aria-expanded', String(!collapsed));
-    $('#side-toggle-text').textContent = collapsed ? '展開股票' : '收合';
-    $('#side-body').inert = collapsed;
-    Store.set('sideCollapsed', collapsed);
+  function setDrawer(open) {
+    const desktop = DESKTOP_QUERY.matches;
+    drawerOpen = open && !desktop;
+    document.body.classList.toggle('drawer-open', drawerOpen);
+    scrim.hidden = !drawerOpen;
+    tabPanels.inert = !desktop && !drawerOpen;
   }
-  setSideCollapsed(Store.get('sideCollapsed', false));
-  $('#btn-side-toggle').addEventListener('click', () => {
-    setSideCollapsed(!document.body.classList.contains('side-collapsed'));
-    G.refit();
+
+  function selectTab(tab) {
+    activeTab = tab;
+    tabs.forEach((t) => {
+      const on = t.dataset.tab === tab;
+      t.setAttribute('aria-selected', String(on));
+      t.tabIndex = on ? 0 : -1;
+    });
+    document.querySelectorAll('.tab-panel').forEach((el) => { el.hidden = el.id !== `panel-${tab}`; });
+  }
+
+  // 開啟指定分頁（手機會一併打開抽屜）
+  function openTab(tab) {
+    selectTab(tab);
+    setDrawer(true);
+    renderPanel();
+    tabPanels.scrollTop = 0;
+  }
+
+  tabs.forEach((t) => {
+    t.addEventListener('click', () => {
+      if (drawerOpen && activeTab === t.dataset.tab) { setDrawer(false); return; }
+      openTab(t.dataset.tab);
+    });
+    // 方向鍵在分頁間移動
+    t.addEventListener('keydown', (e) => {
+      const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+      if (!step) return;
+      e.preventDefault();
+      const next = tabs[(tabs.indexOf(t) + step + tabs.length) % tabs.length];
+      next.focus();
+      openTab(next.dataset.tab);
+    });
   });
-  // 側欄寬度動畫結束後再對齊一次地圖
-  document.body.addEventListener('transitionend', (e) => {
-    if (e.target === document.body && e.propertyName === 'grid-template-columns') G.refit();
-  });
-
-  // ===== 底部個人資料面板 =====
-  const sheet = $('#sheet');
-  const scrim = $('#sheet-scrim');
-  const btnSheet = $('#btn-sheet');
-  const isSheetOpen = () => sheet.classList.contains('open');
-
-  function setSheet(open) {
-    sheet.classList.toggle('open', open);
-    sheet.inert = !open;
-    scrim.hidden = !open;
-    btnSheet.setAttribute('aria-expanded', String(open));
-    if (open) { renderSheet(); $('#btn-sheet-close').focus(); } else { btnSheet.focus(); }
-  }
-  btnSheet.addEventListener('click', () => setSheet(!isSheetOpen()));
-  $('#btn-sheet-close').addEventListener('click', () => setSheet(false));
-  scrim.addEventListener('click', () => setSheet(false));
+  scrim.addEventListener('click', () => setDrawer(false));
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && isSheetOpen() && !document.querySelector('dialog[open]')) setSheet(false);
+    if (e.key === 'Escape' && drawerOpen && !document.querySelector('dialog[open]')) {
+      setDrawer(false);
+      tabs.find((t) => t.dataset.tab === activeTab).focus();
+    }
   });
+  DESKTOP_QUERY.addEventListener('change', () => { setDrawer(false); renderPanel(); G.refit(); });
+  selectTab(activeTab);
+  setDrawer(false);
 
-  function renderSheet() {
+  // ===== 個人：現金／健康／幸福只在上列，這裡放其他數據 =====
+  function renderPersonal() {
     const income = monthlyIncome();
     const net = monthlyNet();
     const rows = state.market.filter((s) => state.holdings[s.id]?.shares);
@@ -119,50 +130,52 @@
     const stockProfit = stats.realizedPnL + unrealized;
     const premium = Ins.monthlyPremium();
     const benefit = Ins.monthlyBenefit();
-    $('#sheet-body').innerHTML = `
-      <dl class="info-grid">
+    $('#personal-body').innerHTML = `
+      <dl class="stat-cards">
+        <div><dt>淨資產</dt><dd>${UI.fmtMoney(netWorth())}</dd></div>
+        <div><dt>每月結餘</dt><dd class="${net >= 0 ? 'pos' : 'neg'}">${UI.fmtSigned(net).replace('NT$ ', '<span class="cur">NT$ </span>')}</dd></div>
+        <div><dt>股票獲利</dt><dd class="${stockProfit >= 0 ? 'up' : 'down'}">${UI.fmtSigned(stockProfit)}</dd></div>
+        <div><dt>每月保費</dt><dd>${UI.fmtMoney(premium)}</dd></div>
+      </dl>
+      <h3 class="panel-h">持股明細</h3>
+      <div class="mini-table">
+        <div class="mini-row mini-head"><span>股票</span><span>股數</span><span>損益</span></div>
+        ${rows.length ? rows.map((s) => {
+          const h = state.holdings[s.id];
+          const pnl = h.shares * s.price - h.cost;
+          return `<div class="mini-row"><span>${UI.escape(s.name)}</span><span>${h.shares.toLocaleString('zh-TW')}</span><span class="${pnl >= 0 ? 'up' : 'down'}">${UI.fmtSigned(pnl)}</span></div>`;
+        }).join('') : '<p class="mini-empty">目前沒有持股，可以從「股票」分頁開始投資。</p>'}
+      </div>
+      <h3 class="panel-h">保單</h3>
+      ${state.policies.length ? `<ul class="policy-list">${state.policies.map((p) => `
+        <li class="${p.status === 'active' ? '' : 'inactive'}">
+          <span>${Insurance.PRODUCTS[p.id].icon} ${UI.escape(p.name)}</span>
+          <small>${Ins.statusText(p)}${p.status === 'active' && !p.paidUp && !p.stopped ? `・月繳 ${UI.fmtMoney(p.monthly)}` : ''}</small>
+        </li>`).join('')}</ul>`
+        : '<p class="policy-list mini-empty">目前沒有保單，可以從「保險」分頁投保。</p>'}
+      <dl class="info-list">
         <div><dt>職業</dt><dd>${job.icon} ${UI.escape(job.name)}</dd></div>
-        <div><dt>年齡</dt><dd>${ageInt()} 歲</dd></div>
-        <div><dt>人生階段</dt><dd>${stage().name}</dd></div>
         <div><dt>${stage().id === 'elder' ? '每月退休金' : '每月收入'}</dt><dd>${UI.fmtMoney(income)}</dd></div>
-        <div><dt>物價指數</dt><dd>${priceIndex().toFixed(2)}</dd>
-          <dd class="info-sub">每年通膨 ${+(E.inflation * 100).toFixed(1)}%；薪資每年成長 ${+(E.salaryGrowth * 100).toFixed(1)}%（每圈調升一次）（目前月薪 ${UI.fmtMoney(salaryNow())}）</dd></div>
         <div><dt>每月生活費</dt><dd>${UI.fmtMoney(expenseNow())}</dd>
           ${state.ltc ? `<dd class="info-sub">另加長照照護費 ${UI.fmtMoney(Ins.careCost())}</dd>` : ''}</div>
+        <div><dt>物價指數</dt><dd>${priceIndex().toFixed(2)}</dd>
+          <dd class="info-sub">每年通膨 ${+(E.inflation * 100).toFixed(1)}%；薪資每年成長 ${+(E.salaryGrowth * 100).toFixed(1)}%（每圈調升一次）（目前月薪 ${UI.fmtMoney(salaryNow())}）</dd></div>
         <div><dt>事件造成的淨收入變化</dt><dd class="${state.netIncomeAdj >= 0 ? 'pos' : 'neg'}">${UI.fmtSigned(state.netIncomeAdj)}/月</dd></div>
-        <div><dt>每月保費</dt><dd>${UI.fmtMoney(premium)}</dd>
-          <dd class="info-sub${premium > job.salary * D.insurance.budgetRate ? ' neg' : ''}">月薪的 ${Math.round((premium / job.salary) * 100)}%（建議約 ${Math.round(D.insurance.budgetRate * 100)}%）</dd></div>
+        <div><dt>保費占月薪</dt><dd class="${premium > job.salary * D.insurance.budgetRate ? 'neg' : ''}">${Math.round((premium / job.salary) * 100)}%</dd>
+          <dd class="info-sub">建議約 ${Math.round(D.insurance.budgetRate * 100)}%</dd></div>
         ${benefit ? `<div><dt>每月保險給付</dt><dd class="pos">${UI.fmtSigned(benefit)}</dd></div>` : ''}
-        <div><dt>每月結餘</dt><dd class="${net >= 0 ? 'pos' : 'neg'}">${UI.fmtSigned(net)}</dd></div>
-        <div><dt>現金</dt><dd>${UI.fmtMoney(state.cash)}</dd>
-          <dd class="info-sub">活存年利率 ${+(E.bankRate * 100).toFixed(2)}%，累計利息 ${UI.fmtMoney(stats.interestTotal)}</dd></div>
-        <div><dt>股票市值</dt><dd>${UI.fmtMoney(stockValue())}</dd></div>
+        <div><dt>股票市值</dt><dd>${UI.fmtMoney(stockValue())}</dd>
+          <dd class="info-sub">已實現 ${UI.fmtSigned(stats.realizedPnL)}・未實現 ${UI.fmtSigned(unrealized)}</dd></div>
         <div><dt>保單價值</dt><dd>${UI.fmtMoney(Ins.value())}</dd>
           <dd class="info-sub">投資型保險與年金險帳戶</dd></div>
-        <div><dt>股市截至目前淨利</dt><dd class="${stockProfit >= 0 ? 'up' : 'down'}">${UI.fmtSigned(stockProfit)}</dd>
-          <dd class="info-sub">已實現 ${UI.fmtSigned(stats.realizedPnL)}・未實現 ${UI.fmtSigned(unrealized)}</dd></div>
-        <div><dt>淨資產</dt><dd>${UI.fmtMoney(netWorth())}</dd></div>
-        <div><dt>健康指數</dt><dd>${state.health} / 100</dd>
-          ${state.ltc ? '<dd class="info-sub neg">長照狀態</dd>' : ''}
-          ${state.medicalHistory.length ? `<dd class="info-sub">病史：${state.medicalHistory.map((t) => Insurance.TAG_NAME[t]).join('、')}</dd>` : ''}</div>
-        <div><dt>幸福指數</dt><dd>${state.happiness} / 100</dd>
-          <dd class="info-sub${state.happiness <= 25 ? ' neg' : ''}">${state.happiness <= 25 ? '心情低落，再低下去會失去生活動力' : '約等於心理健康，歸零時遊戲結束'}</dd></div>
-        <div><dt>已完成圈數</dt><dd>${state.lap} 圈</dd></div>
+        <div><dt>活存利息</dt><dd>${UI.fmtMoney(stats.interestTotal)}</dd>
+          <dd class="info-sub">年利率 ${+(E.bankRate * 100).toFixed(2)}%</dd></div>
+        <div><dt>病史</dt><dd>${state.medicalHistory.length ? state.medicalHistory.map((t) => Insurance.TAG_NAME[t]).join('、') : '無'}</dd>
+          ${state.ltc ? '<dd class="info-sub neg">長照狀態</dd>' : ''}</div>
+        <div><dt>圈數</dt><dd>${stage().name}・${lapText()}</dd>
+          <dd class="info-sub">已完成 ${state.lap} 圈</dd></div>
         <div><dt>回合數</dt><dd>${state.turn}</dd></div>
-      </dl>
-      <h3>持股明細</h3>
-      ${rows.length ? `
-        <div class="table-wrap"><table class="data-table">
-          <thead><tr><th scope="col">股票</th><th scope="col">股數</th><th scope="col">現價</th><th scope="col">市值</th><th scope="col">損益</th></tr></thead>
-          <tbody>${rows.map((s) => {
-            const h = state.holdings[s.id];
-            const value = h.shares * s.price;
-            const pnl = value - h.cost;
-            return `<tr><td>${UI.escape(s.name)}</td><td>${h.shares.toLocaleString('zh-TW')}</td><td>${s.price.toFixed(2)}</td><td>${UI.fmtMoney(value)}</td><td class="${pnl >= 0 ? 'up' : 'down'}">${UI.fmtSigned(pnl)}</td></tr>`;
-          }).join('')}</tbody>
-        </table></div>` : '<p class="empty">目前沒有持股，可以從右上角「股票」開始投資。</p>'}
-      <h3>保單</h3>
-      ${G.policyTable()}`;
+      </dl>`;
   }
 
   // ===== 歷史事件 =====
@@ -185,13 +198,11 @@
       renderHistory();
     });
   });
-  $('#btn-history').addEventListener('click', () => { renderHistory(); $('#dlg-history').showModal(); });
   // 點市場跑馬燈：直接看市場波動紀錄
   $('#market-ticker').addEventListener('click', () => {
     historyFilter = 'market';
     document.querySelectorAll('[data-filter]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.filter === 'market')));
-    renderHistory();
-    $('#dlg-history').showModal();
+    openTab('history');
   });
 
   // ===== 暫停（含離開遊戲） =====
@@ -202,6 +213,7 @@
       const choice = await UI.modal({
         title: '遊戲暫停',
         body: pauseBody(),
+        className: 'modal-pause',
         actions: [
           { label: '離開遊戲', value: 'quit', variant: 'danger' },
           { label: '重看新手教學', value: 'tutorial', variant: 'ghost' },
@@ -223,7 +235,7 @@
       `<label><input type="radio" name="${name}" value="${value}" ${s[name] === value ? 'checked' : ''}> ${label}</label>`;
     const el = document.createElement('div');
     el.innerHTML = `
-      <p class="pause-body" aria-hidden="true">⏸️</p>
+      <p class="pause-body" aria-hidden="true">${UI.icons.pause}</p>
       <p style="text-align:center">休息一下，準備好再繼續。</p>
       <hr class="divider">
       <fieldset class="field">
@@ -263,5 +275,5 @@
     return ok;
   }
 
-  Object.assign(G, { perkText, renderStatus, renderSide, renderSheet, isSheetOpen, renderHistory });
+  Object.assign(G, { perkText, renderStatus, renderPanel, isPanelVisible, openTab, renderHistory });
 })(window.Game);

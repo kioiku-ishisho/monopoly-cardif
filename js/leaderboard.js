@@ -4,7 +4,7 @@
     const who = `${p.jobIcon ? `<span aria-hidden="true">${UI.escape(p.jobIcon)}</span> ` : ''}${UI.escape(p.jobName || '玩家')}`;
     return `
       <tr class="${p.isMe ? 'is-me' : ''}"${p.isMe ? ' aria-current="true"' : ''}>
-        <td class="lb-rank">${p.rank <= 3 ? ['🥇', '🥈', '🥉'][p.rank - 1] : p.rank}<span class="sr-only">第 ${p.rank} 名</span></td>
+        <td class="lb-rank"><span aria-hidden="true">${p.rank <= 3 ? UI.icon('medal') + ' ' : ''}${p.rank}</span><span class="sr-only">第 ${p.rank} 名</span></td>
         <td>${who}${p.isMe ? ' <strong class="lb-me">（你）</strong>' : ''}</td>
         <td>${p.finalAge != null ? `${p.finalAge} 歲` : '—'}</td>
         <td class="lb-score">${p.score}<small>${UI.escape(p.grade)}</small></td>
