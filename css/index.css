@@ -10,12 +10,13 @@
   color: #1a1a1a; /* 首頁固定用職業配色，不跟深色主題 */
   transition: background-color 0.3s ease;
 }
-/* 滿版角色圖（之後放 assets/jobs/<jobId>.png，以 background-image 設定） */
+/* 滿版角色形象圖（assets/jobs/<jobId>.jpg，由 js/index.js 以 background-image 設定）；角色多在右半邊 */
 .hero-art {
   position: absolute;
   inset: 0;
-  background: center / cover no-repeat;
+  background: 70% center / cover no-repeat;
   pointer-events: none;
+  transition: background-image 0.3s ease;
 }
 
 .hero-main {

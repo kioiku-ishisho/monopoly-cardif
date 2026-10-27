@@ -10,7 +10,8 @@
  *   });
  *   art.moveTo(12, { hopMs: 220 }) → Promise   逐格前進到第 12 格（繞圈自動處理）
  *   art.teleportTo(0) / art.getTokenIndex()
- *   art.setCharacter(key) / art.setMode(mode) / art.setZoom(z) / art.setOverview(on) / art.setInsets({ top, bottom })
+ *   art.setCharacter(key) / art.setMode(mode) / art.setZoom(z) / art.zoomAt(f, x, y) / art.panBy(dx, dy)
+ *   art.setOverview(on) / art.setInsets({ top, bottom, left, right }) / art.tokenVisible()
  *   art.on('arrive' | 'lap' | 'themechange' | 'lost', fn)
  *   art.resize() / art.pause() / art.resume() / art.dispose() / art.info()
  *
@@ -233,7 +234,10 @@
     /* ---------- 鏡頭：固定等角視角，只移動 target ---------- */
     const camTarget = new T.Vector3().copy(pen.pts[0]);
     const ringCenter = O60.clone();
-    let zoom = 1, overview = false, insets = { top: 0, bottom: 0 };
+    let zoom = 1, overview = false, insets = { top: 0, bottom: 0, left: 0, right: 0 };
+    // 玩家拖曳的位移（螢幕平面上的世界單位：x 沿 RV 往右、y 沿 UV 往上），加在跟隨點上
+    const pan = { x: 0, y: 0 }, PAN_MAX = 30;
+    const look = new T.Vector3();
     let elev = ISO_EL, azim = ISO_AZ;
     let cssW = 1, cssH = 1;
 
@@ -246,23 +250,52 @@
       if (overview) {
         // 整圈：環的螢幕外框加一點邊界
         const needW = box60.h[0] + 2.5, needH = box60.h[1] + 3;
-        const usable = Math.max(0.3, (cssH - insets.top - insets.bottom) / cssH);
-        halfW = Math.max(needW, (needH / usable) * aspect);
+        const usableH = Math.max(0.3, (cssH - insets.top - insets.bottom) / cssH);
+        const usableW = Math.max(0.3, (cssW - insets.left - insets.right) / cssW);
+        halfW = Math.max(needW / usableW, (needH / usableH) * aspect) / zoom;
         halfH = halfW / aspect;
       } else {
         halfW = (aspect >= 1 ? 16 : 10) / 2 / zoom;
         halfH = halfW / aspect;
       }
-      // 上下有 UI 疊在畫面上時，把角色放在「可見區域」的中央
-      const shift = ((insets.bottom - insets.top) / 2) * ((2 * halfH) / cssH);
-      cam.left = -halfW; cam.right = halfW; cam.top = halfH - shift; cam.bottom = -halfH - shift;
+      // UI 疊在畫面上下左右時，把角色放在「可見區域」的中央
+      const shiftY = ((insets.bottom - insets.top) / 2) * ((2 * halfH) / cssH);
+      const shiftX = ((insets.right - insets.left) / 2) * ((2 * halfW) / cssW);
+      cam.left = -halfW + shiftX; cam.right = halfW + shiftX; cam.top = halfH - shiftY; cam.bottom = -halfH - shiftY;
       cam.updateProjectionMatrix();
     }
     function placeCam() {
       const el = T.MathUtils.degToRad(elev), az = T.MathUtils.degToRad(azim), d = 80;
-      cam.position.set(camTarget.x + Math.sin(az) * Math.cos(el) * d, camTarget.y + Math.sin(el) * d, camTarget.z + Math.cos(az) * Math.cos(el) * d);
-      cam.lookAt(camTarget);
-      skyGroup.position.copy(camTarget);
+      look.copy(camTarget).addScaledVector(RV, pan.x).addScaledVector(UV, pan.y);
+      cam.position.set(look.x + Math.sin(az) * Math.cos(el) * d, look.y + Math.sin(el) * d, look.z + Math.cos(az) * Math.cos(el) * d);
+      cam.lookAt(look);
+      skyGroup.position.copy(look);
+    }
+    const unitsPerPx = () => (cam.right - cam.left) / cssW;
+    function panBy(dx, dy) {
+      const k = unitsPerPx();
+      pan.x = Math.max(-PAN_MAX, Math.min(PAN_MAX, pan.x - dx * k));
+      pan.y = Math.max(-PAN_MAX, Math.min(PAN_MAX, pan.y + dy * k));
+      placeCam();
+    }
+    // 以畫布上的 (x, y)（CSS px）為中心縮放：游標下的點不動
+    function zoomAt(factor, x, y) {
+      const next = Math.min(2.5, Math.max(0.4, zoom * factor));
+      if (next === zoom) return;
+      const k0 = unitsPerPx();
+      const ox = (x - (-cam.left / (cam.right - cam.left)) * cssW) * k0;
+      const oy = -(y - (cam.top / (cam.top - cam.bottom)) * cssH) * k0;
+      const f = next / zoom;
+      zoom = next; fit();
+      pan.x = Math.max(-PAN_MAX, Math.min(PAN_MAX, pan.x + ox * (1 - 1 / f)));
+      pan.y = Math.max(-PAN_MAX, Math.min(PAN_MAX, pan.y + oy * (1 - 1 / f)));
+      placeCam();
+    }
+    // 棋子目前是否在畫面內（留 margin 比例的邊）
+    function tokenVisible(margin) {
+      if (!token) return true;
+      const p = pen.pts[idx].clone().project(cam), m = 1 - (margin || 0.1);
+      return Math.abs(p.x) <= m && Math.abs(p.y) <= m;
     }
 
     /* ---------- 主迴圈 ---------- */
@@ -345,11 +378,19 @@
         if (m === mode) return;
         mode = m; buildMap();
       },
-      setZoom(z) { zoom = Math.min(2.2, Math.max(0.5, z)); overview = false; fit(); },
+      setZoom(z) { zoom = Math.min(2.5, Math.max(0.4, z)); fit(); placeCam(); },
       getZoom: () => zoom,
-      setOverview(on) { overview = !!on; fit(); },
+      zoomAt,
+      panBy,
+      tokenVisible,
+      // 回到跟著棋子（或整圈）：清掉拖曳位移與縮放
+      setOverview(on) { overview = !!on; zoom = 1; pan.x = pan.y = 0; fit(); placeCam(); },
       isOverview: () => overview,
-      setInsets(v) { insets = { top: Math.max(0, v.top || 0), bottom: Math.max(0, v.bottom || 0) }; fit(); },
+      setInsets(v) {
+        const c = (n) => Math.max(0, n || 0);
+        insets = { top: c(v.top), bottom: c(v.bottom), left: c(v.left), right: c(v.right) };
+        fit(); placeCam();
+      },
       // 除錯用：離開潘洛斯視角可以看到階梯其實是錯開的
       setAngles(e, a) { elev = e == null ? ISO_EL : e; azim = a == null ? ISO_AZ : a; placeCam(); },
       on(name, fn) { (listeners[name] = listeners[name] || []).push(fn); return api; },

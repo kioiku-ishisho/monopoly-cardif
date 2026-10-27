@@ -88,15 +88,12 @@
 }
 
 /* ===== 地圖 ===== */
-.game-main { grid-area: main; position: relative; min-height: 0; }
-/* 手機：地圖鋪滿整個畫面、放在最底層；其他元件疊在上面，空白處不擋地圖拖曳 */
-@media (max-width: 1023px) {
-  .game-main { position: fixed; inset: 0; z-index: 0; }
-  .game-sub, .dice-area { position: relative; z-index: 10; }
-  .game-top, .game-sub, .dice-area { pointer-events: none; }
-  .game-top > *, .game-sub > *, .dice-area > * { pointer-events: auto; }
-  .map-controls { bottom: max(18px, env(safe-area-inset-bottom)); }
-}
+/* 手機與電腦版：地圖鋪滿整個畫面、放在最底層；其他元件疊在上面，空白處不擋地圖拖曳 */
+.game-main { grid-area: main; position: fixed; inset: 0; z-index: 0; min-height: 0; }
+.game-sub, .dice-area { position: relative; z-index: 10; }
+.game-top, .game-sub, .dice-area { pointer-events: none; }
+.game-top > *, .game-sub > *, .dice-area > * { pointer-events: auto; }
+.map-controls { bottom: max(18px, env(safe-area-inset-bottom)); }
 .board-viewport {
   position: absolute;
   inset: 0;
@@ -113,7 +110,6 @@
 
 /* 3D 地圖（js/art/）：畫布鋪滿；SVG 地圖改成只給螢幕閱讀器的格子清單 */
 .board-3d { display: none; }
-.board-viewport.is-3d { cursor: default; }
 .board-viewport.is-3d .board-3d { display: block; position: absolute; inset: 0; width: 100%; height: 100%; }
 .board-viewport.is-3d .board {
   width: 1px !important;
@@ -683,7 +679,8 @@
   .market-ticker { width: min(545px, 100%); min-height: 45px; padding: 4px 14px; border-width: 2px; font-size: clamp(1rem, 1.5vw, 1.375rem); }
   .ticker-meta { display: inline; }
 
-  .game-main { margin: 40px 110px 0; border: 2px solid var(--line); }
+  /* 地圖在右側欄底下也鋪滿；控制鈕移到右側欄左邊 */
+  .map-controls { right: calc(350px + 16px); }
 
   .dice-area { flex-direction: row; justify-content: center; gap: 16px; padding: 30px 16px 40px; }
   .dice-result { order: 2; max-width: 260px; }
@@ -699,6 +696,8 @@
     min-width: 0;
     border-left: 2px solid var(--line);
     background: var(--surface);
+    position: relative;
+    z-index: 20;
   }
   :root[data-theme="dark"]:not([data-contrast="high"]) .side-panel { background: #06140d; }
   .tab-list {

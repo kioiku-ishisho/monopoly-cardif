@@ -40,7 +40,7 @@
   }
   if (art) {
     vp.classList.add('is-3d');
-    $('#map-help').textContent = '地圖以固定視角跟著棋子移動。滾輪或雙指縮放；鍵盤操作：加號與減號縮放，0 跟著棋子，9 顯示整圈。';
+    $('#map-help').textContent = '地圖以固定視角跟著棋子移動，可拖曳移動、滾輪或雙指縮放。鍵盤操作：方向鍵移動，加號與減號縮放，0 跟著棋子，9 顯示整圈。';
     // 網站的淺色／深色設定改變時，地圖主題跟著切換
     new MutationObserver(() => art && art.setMode(pageTheme()))
       .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
@@ -56,15 +56,17 @@
     window.addEventListener('pagehide', () => art && art.dispose());
   }
 
-  // 手機版狀態列與骰子疊在地圖上：告訴 3D 舞台上下被遮住多少，棋子才會在可見區域中央
+  // 地圖鋪滿整個畫面，狀態列、骰子與電腦版右側欄疊在上面：告訴 3D 舞台被遮住多少，棋子才會在可見區域中央
   function updateInsets() {
     if (!art) return;
     const r = vp.getBoundingClientRect();
     const sub = $('.game-sub').getBoundingClientRect();
     const dice = $('.dice-area').getBoundingClientRect();
+    const side = $('#side-panel').getBoundingClientRect();
     art.setInsets({
       top: sub.bottom > r.top && sub.top < r.bottom ? sub.bottom - r.top : 0,
       bottom: dice.top < r.bottom && dice.bottom > r.top ? r.bottom - dice.top : 0,
+      right: side.width && side.left < r.right ? r.right - side.left : 0,
     });
   }
 
@@ -190,7 +192,7 @@
   const refit = () => { if (art) updateInsets(); else if (!userMoved) fitBoard(false); };
 
   function zoomAt(factor, cx, cy) {
-    if (art) { art.setZoom(art.getZoom() * factor); return; }
+    if (art) { art.zoomAt(factor, cx, cy); userMoved = true; return; }
     const ns = clamp(view.s * factor, MIN_S, MAX_S);
     const k = ns / view.s;
     view.x = cx - (cx - view.x) * k;
@@ -215,7 +217,8 @@
   }
 
   function ensureTokenVisible() {
-    if (art) return; // 3D 鏡頭一直跟著棋子
+    // 3D 鏡頭會跟著棋子；玩家拖走或放大到看不見棋子時才回到棋子身上
+    if (art) { if (!art.tokenVisible()) art.setOverview(false); return; }
     const r = vp.getBoundingClientRect();
     const { x, y } = tokenCenter();
     const sx = view.x + x * view.s;
@@ -239,7 +242,7 @@
     if (!prev) return;
     const cur = { x: e.clientX, y: e.clientY };
     if (pointers.size === 1) {
-      if (art) return; // 3D 視角固定，不能拖曳
+      if (art) { art.panBy(cur.x - prev.x, cur.y - prev.y); userMoved = true; pointers.set(e.pointerId, cur); return; }
       view.x += cur.x - prev.x;
       view.y += cur.y - prev.y;
       userMoved = true;
@@ -249,6 +252,7 @@
       pointers.set(e.pointerId, cur);
       const next = pinchInfo();
       const r = vp.getBoundingClientRect();
+      if (art) art.panBy(next.mx - pinch.mx, next.my - pinch.my);
       view.x += next.mx - pinch.mx;
       view.y += next.my - pinch.my;
       zoomAt(next.dist / pinch.dist, next.mx - r.left, next.my - r.top);
@@ -283,7 +287,10 @@
       ArrowUp: () => { view.y += step; },
       ArrowDown: () => { view.y -= step; },
     };
-    if (keys[e.key] && !art) { keys[e.key](); userMoved = true; applyView(false); e.preventDefault(); }
+    if (keys[e.key] && art) {
+      const d = { ArrowLeft: [step, 0], ArrowRight: [-step, 0], ArrowUp: [0, step], ArrowDown: [0, -step] }[e.key];
+      art.panBy(d[0], d[1]); userMoved = true; e.preventDefault();
+    } else if (keys[e.key]) { keys[e.key](); userMoved = true; applyView(false); e.preventDefault(); }
     else if (e.key === '+' || e.key === '=') { zoomCenter(1.2); e.preventDefault(); }
     else if (e.key === '-' || e.key === '_') { zoomCenter(1 / 1.2); e.preventDefault(); }
     else if (e.key === '0') { userMoved = false; fitBoard(true); e.preventDefault(); }

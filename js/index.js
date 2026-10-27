@@ -13,8 +13,9 @@
   function renderJob(job, animate) {
     current = job;
     UI.applyJobTheme(job);
-    // 角色圖尚未提供，之後放 assets/jobs/<jobId>.png 再打開
-    // $('#hero-art').style.backgroundImage = `url("assets/jobs/${job.id}.png")`;
+    $('#hero-art').style.backgroundImage = `url("assets/jobs/${job.id}.jpg")`;
+    // 先載入下一個職業的圖，按 ⤨ 時不會閃白
+    new Image().src = `assets/jobs/${jobs[(jobs.indexOf(job) + 1) % jobs.length].id}.jpg`;
     $('#job-name').textContent = job.name;
     $('#job-salary').textContent = UI.fmtMoney(job.salary);
     if (animate) {
