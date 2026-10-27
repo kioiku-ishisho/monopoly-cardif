@@ -107,10 +107,10 @@
 
       <h3 class="report-h">🛡️ 保險</h3>
       ${policies.length ? `
-        <div class="table-wrap"><table class="data-table report-table">
+        <div class="table-wrap table-stack"><table class="data-table report-table">
           <thead><tr><th scope="col">險種</th><th scope="col">投保</th><th scope="col">月繳</th><th scope="col">狀態</th><th scope="col">已繳</th><th scope="col">已理賠</th></tr></thead>
-          <tbody>${policies.map((p) => `<tr><td>${UI.escape(p.name)}${p.legacy ? '<small>（舊保單）</small>' : ''}</td><td>${p.entryAge} 歲</td>
-            <td>${p.monthly ? UI.fmtMoney(p.monthly) : '—'}</td><td>${UI.escape(p.status)}</td><td>${UI.fmtMoney(p.paid)}</td><td>${UI.fmtMoney(p.claimed)}</td></tr>`).join('')}</tbody>
+          <tbody>${policies.map((p) => `<tr><td>${UI.escape(p.name)}${p.legacy ? '<small>（舊保單）</small>' : ''}</td><td data-label="投保">${p.entryAge} 歲</td>
+            <td data-label="月繳">${p.monthly ? UI.fmtMoney(p.monthly) : '—'}</td><td data-label="狀態">${UI.escape(p.status)}</td><td data-label="已繳">${UI.fmtMoney(p.paid)}</td><td data-label="已理賠">${UI.fmtMoney(p.claimed)}</td></tr>`).join('')}</tbody>
         </table></div>` : '<p class="empty">目前沒有任何保單。</p>'}
       <p class="report-sub">每月保費 ${UI.fmtMoney(premium)}，占月薪 ${Math.round((premium / salaryNow()) * 100)}%（建議 5–15%）</p>
 

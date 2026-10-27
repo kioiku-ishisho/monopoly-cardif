@@ -1,4 +1,7 @@
 /* 版面：上列（暫停＋狀態列）／市場訊息／地圖／擲骰子；電腦版右側常駐分頁欄 */
+/* 手機防誤觸：取消點兩下放大。touch-action 不會穿過可捲動的抽屜、視窗往下傳，所以每個元素都設；
+   地圖（.board-viewport）在後面另設 none，拖曳與雙指縮放由 js/game/map.js 處理 */
+.page-game, .page-game * { touch-action: manipulation; }
 .page-game {
   height: 100vh;
   height: 100dvh;
@@ -444,9 +447,12 @@
 .stock-card .s-price small { display: block; font-size: 0.85rem; }
 .stock-card .s-hold { color: var(--text-muted); font-size: 0.9rem; }
 .stock-card .s-pnl { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 0.9rem; font-weight: 700; }
-.stock-card .s-trade { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+/* 股數／買進／賣出固定同一列，股數欄吃剩下的寬度 */
+.stock-card .s-trade { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 6px; align-items: center; }
+.stock-card .s-trade .btn { min-height: 40px; padding-inline: 12px; white-space: nowrap; }
 .stock-card input[type="number"] {
-  width: 110px;
+  width: 100%;
+  min-width: 0;
   min-height: 40px;
   padding: 6px 10px;
   border: 2px solid var(--border);
@@ -526,10 +532,27 @@
 .policy-table td { white-space: nowrap; }
 .policy-table tr.inactive td { color: var(--text-muted); }
 .policy-actions { display: flex; gap: 6px; }
+/* 遊戲頁的視窗內容只能直向捲動 */
+.page-game .modal-body { overflow-x: hidden; }
+/* 保險表格：容器窄時（右側欄、抽屜、手機視窗）改成一張張卡片，不出現橫向捲動 */
+.table-stack { container-type: inline-size; overflow-x: visible; }
+@container (max-width: 760px) {
+  .table-stack .data-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .table-stack .data-table, .table-stack .data-table tbody { display: block; }
+  .table-stack .data-table tr { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; padding: 10px 12px; background: var(--chip-bg, var(--surface-2)); }
+  .table-stack .data-table td { display: flex; justify-content: space-between; gap: 12px; padding: 0; border: 0; white-space: normal; text-align: right; overflow-wrap: anywhere; }
+  .table-stack .data-table td:first-child { display: block; font-weight: 700; text-align: left; }
+  .table-stack .data-table td[data-label]::before { content: attr(data-label); flex: none; color: var(--text-muted); font-size: 0.9em; text-align: left; }
+  .table-stack .data-table td.policy-actions { justify-content: flex-end; flex-wrap: wrap; margin-top: 4px; }
+  .table-stack .data-table td.policy-actions:empty { display: none; }
+}
 #policy-body > .e-meta, #policy-dlg-body > .e-meta { font-size: 0.8rem; color: var(--text-muted); margin-top: 6px; }
 
 /* 主題：深色模式的地圖與骰子加上霓虹光暈 */
-:root[data-theme="dark"]:not([data-contrast="high"]) .dice-btn { box-shadow: var(--glow); }
+/* 骰子光暈用職業主題色（--job-btn），不用全站的綠色光暈 */
+:root[data-theme="dark"]:not([data-contrast="high"]) .dice-btn {
+  box-shadow: 0 0 18px color-mix(in srgb, var(--job-btn) 70%, transparent), 0 0 4px color-mix(in srgb, var(--job-btn) 50%, transparent);
+}
 :root[data-theme="dark"]:not([data-contrast="high"]) .tile { background: #06140d; }
 
 /* ===== 市場跑馬燈：顯示最近一次市場波動，直到下一回合 ===== */
@@ -695,6 +718,7 @@
   right: 0;
   bottom: 0;
   width: var(--drawer-w);
+  overflow-x: hidden; /* 所有版本都不出現橫向捲動軸 */
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 18px 14px max(18px, env(safe-area-inset-bottom));
@@ -926,3 +950,23 @@ dialog.tutorial::backdrop { background: transparent; }
 @media (max-width: 420px) { .tut-pair { grid-template-columns: 1fr; } }
 :root[data-motion="reduce"] .tut-hole, :root[data-motion="reduce"] .tut-card, :root[data-motion="reduce"] .tut-progress span { transition: none; }
 @media (prefers-reduced-motion: reduce) { .tut-hole, .tut-card, .tut-progress span { transition: none; } }
+
+/* ===== 保險建議書視窗（iframe 載入 proposal.html，不離開遊戲頁） ===== */
+dialog.proposal-dlg {
+  width: min(920px, calc(100vw - 24px));
+  height: calc(100vh - 24px);
+  height: calc(100dvh - 24px);
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  border: 0;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+dialog.proposal-dlg[open] { display: flex; }
+dialog.proposal-dlg::backdrop { background: color-mix(in srgb, var(--job-dark, #000) 60%, transparent); }
+.proposal-frame { flex: 1; width: 100%; height: 100%; border: 0; background: #fff; }
+@media (max-width: 640px) {
+  dialog.proposal-dlg { width: 100vw; height: 100vh; height: 100dvh; margin: 0; }
+}

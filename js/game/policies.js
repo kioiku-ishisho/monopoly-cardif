@@ -6,7 +6,7 @@
   function policyTable() {
     if (!state.policies.length) return '<p class="empty">目前沒有保單，踩到「保險業務員」格時可以投保。</p>';
     return `
-      <div class="table-wrap"><table class="data-table policy-table">
+      <div class="table-wrap table-stack"><table class="data-table policy-table">
         <thead><tr><th scope="col">險種</th><th scope="col">投保</th><th scope="col">狀態</th><th scope="col">月繳</th><th scope="col">已繳</th><th scope="col">已領給付</th><th scope="col">保單價值</th><th scope="col"><span class="sr-only">操作</span></th></tr></thead>
         <tbody>${state.policies.map((p) => {
           const active = p.status === 'active';
@@ -17,12 +17,12 @@
           if (Ins.canSurrender(p)) actions.push(`<button class="btn btn-sm btn-ghost" type="button" data-policy-cancel="${p.uid}" ${state.over ? 'disabled' : ''}>解約${surrender ? `（${UI.fmtMoney(surrender)}）` : ''}</button>`);
           return `<tr class="${active ? '' : 'inactive'}">
             <td>${Insurance.PRODUCTS[p.id].icon} ${UI.escape(p.name)}</td>
-            <td>${p.entryAge} 歲</td>
-            <td>${Ins.statusText(p)}</td>
-            <td>${due ? UI.fmtMoney(p.monthly) : '—'}</td>
-            <td>${UI.fmtMoney(p.paid)}</td>
-            <td>${UI.fmtMoney(p.claimed)}</td>
-            <td>${UI.fmtMoney(Ins.policyValue(p))}</td>
+            <td data-label="投保">${p.entryAge} 歲</td>
+            <td data-label="狀態">${Ins.statusText(p)}</td>
+            <td data-label="月繳">${due ? UI.fmtMoney(p.monthly) : '—'}</td>
+            <td data-label="已繳">${UI.fmtMoney(p.paid)}</td>
+            <td data-label="已領給付">${UI.fmtMoney(p.claimed)}</td>
+            <td data-label="保單價值">${UI.fmtMoney(Ins.policyValue(p))}</td>
             <td class="policy-actions">${actions.join('')}</td>
           </tr>`;
         }).join('')}</tbody>
@@ -75,21 +75,32 @@
 
   // ===== 保險視窗：已投保保單與可投保險種，商品內容一律看建議書 =====
   // 建議書（可列印成 PDF）：依目前年齡、職業、健康加費試算
+  // 疊在遊戲頁上的 iframe 視窗裡開啟；開新分頁在手機上常變成同一分頁，按「關閉」返回時遊戲會重新開局
+  const proposalDlg = $('#dlg-proposal');
+  const proposalFrame = $('#proposal-frame');
   function openProposal(id) {
     const prod = Insurance.PRODUCTS[id];
     const q = Ins.quote(prod);
     // 傳精確年齡，建議書的首年保費才會和業務員／保險頁的報價一致
-    const params = new URLSearchParams({ product: id, age: Math.round(age() * 100) / 100, job: job.id, surcharge: q.surcharge || 1 });
-    window.open(`proposal.html?${params}`, '_blank');
+    const params = new URLSearchParams({ product: id, age: Math.round(age() * 100) / 100, job: job.id, surcharge: q.surcharge || 1, embed: 1 });
+    // 用 replace 換內容，不在遊戲頁的瀏覽紀錄裡留下建議書
+    proposalFrame.contentWindow.location.replace(`proposal.html?${params}`);
+    proposalDlg.showModal();
   }
+  // 建議書頁的「關閉」鈕與 Esc 會送 proposal-close 訊息回來
+  window.addEventListener('message', (e) => {
+    if (e.origin === location.origin && e.source === proposalFrame.contentWindow && e.data?.type === 'proposal-close') proposalDlg.close();
+  });
+  proposalDlg.addEventListener('close', () => proposalFrame.contentWindow.location.replace('about:blank'));
+  proposalDlg.addEventListener('click', (e) => { if (e.target === proposalDlg) proposalDlg.close(); }); // 點背景關閉
 
   function productRow(p) {
     const q = Ins.quote(p);
     const price = !q.ok ? UI.escape(q.reason) : p.amounts ? '自選' : UI.fmtMoney(q.premium);
     return `<tr>
       <td>${UI.escape(p.name)}</td>
-      <td>${p.maxEntryAge} 歲</td>
-      <td>${price}</td>
+      <td data-label="最高投保年齡">${p.maxEntryAge} 歲</td>
+      <td data-label="首期月繳">${price}</td>
       <td class="policy-actions">
         <button class="btn btn-sm btn-ghost" type="button" data-proposal="${p.id}">產生建議書</button>
         <button class="btn btn-sm btn-primary" type="button" data-buy-product="${p.id}" ${!q.ok || state.over ? 'disabled' : ''}>投保</button>
@@ -108,7 +119,7 @@
       <h3 class="policy-h">已投保保單</h3>
       ${policyTable()}
       <h3 class="policy-h">可投保險種</h3>
-      <div class="table-wrap"><table class="data-table">
+      <div class="table-wrap table-stack"><table class="data-table">
         <thead><tr><th scope="col">險種</th><th scope="col">最高投保年齡</th><th scope="col">首期月繳</th><th scope="col"><span class="sr-only">操作</span></th></tr></thead>
         <tbody>${Object.values(Insurance.PRODUCTS).filter((p) => !p.legacy).map(productRow).join('')}</tbody>
       </table></div>

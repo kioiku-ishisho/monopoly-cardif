@@ -14,7 +14,14 @@
   const CFG = GameData.insurance;
 
   $('#btn-print').addEventListener('click', () => window.print());
-  $('#btn-close').addEventListener('click', () => (history.length > 1 ? history.back() : window.close()));
+  // 嵌在遊戲頁的視窗裡（?embed=1）：通知遊戲頁關閉視窗，不換頁，遊戲才不會重新開局
+  const embedded = params.has('embed') && window.parent !== window;
+  const close = () => {
+    if (embedded) window.parent.postMessage({ type: 'proposal-close' }, location.origin);
+    else window.close();
+  };
+  $('#btn-close').addEventListener('click', close);
+  if (embedded) document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
 
   if (!prod || prod.legacy) {
     paper.innerHTML = '<p>查無此險種之建議書。</p>';
