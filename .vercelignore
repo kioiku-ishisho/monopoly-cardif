@@ -5,3 +5,4 @@ scripts
 firebase.json
 firestore.rules
 firestore.indexes.json
+dev

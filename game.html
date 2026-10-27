@@ -58,9 +58,10 @@
   </div>
 
   <main class="game-main">
-    <!-- 地圖與棋子：新版棋盤與角色圖尚未設計，先沿用現有地圖 -->
+    <!-- 地圖與棋子：有 WebGL 時顯示 3D 潘洛斯階梯（js/art/），否則沿用 SVG 地圖；格子清單保留給螢幕閱讀器 -->
     <div class="board-viewport" id="board-viewport" tabindex="0" role="region"
          aria-roledescription="地圖" aria-label="大富翁地圖" aria-describedby="map-help">
+      <canvas class="board-3d" id="board-3d" aria-hidden="true"></canvas>
       <div class="board" id="board">
         <svg class="roads" id="roads" aria-hidden="true" focusable="false"></svg>
         <div class="loops" id="loops"></div>
@@ -142,6 +143,12 @@
   <script src="js/world.js"></script>
   <script src="js/tutorial.js"></script>
   <script src="js/game/core.js"></script>
+  <script src="vendor/three.min.js"></script>
+  <script src="js/art/core.js"></script>
+  <script src="js/art/data.js"></script>
+  <script src="js/art/characters.js"></script>
+  <script src="js/art/themes.js"></script>
+  <script src="js/art/board.js"></script>
   <script src="js/game/map.js"></script>
   <script src="js/game/panels.js"></script>
   <script src="js/game/policies.js"></script>

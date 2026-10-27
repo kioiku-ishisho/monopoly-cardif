@@ -110,6 +110,18 @@
   background-blend-mode: normal;
 }
 .board-viewport.dragging { cursor: grabbing; }
+
+/* 3D 地圖（js/art/）：畫布鋪滿；SVG 地圖改成只給螢幕閱讀器的格子清單 */
+.board-3d { display: none; }
+.board-viewport.is-3d { cursor: default; }
+.board-viewport.is-3d .board-3d { display: block; position: absolute; inset: 0; width: 100%; height: 100%; }
+.board-viewport.is-3d .board {
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden;
+  clip-path: inset(50%);
+  transform: none !important;
+}
 .board-viewport:focus-visible { outline-offset: -4px; }
 
 /* 世界地圖：三個不規則的圈畫在同一張大圖上（尺寸由 js/world.js 計算） */
