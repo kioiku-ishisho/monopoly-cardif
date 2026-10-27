@@ -18,11 +18,7 @@
   const currentTile = () => TILES[state.position];
 
   // ===== 3D 地圖 =====
-  // 格子上的字（一個全形字）與底色：C 為主題特殊色，A／B 為一般色
-  const GLYPH = {
-    start: '起', chance: '機', fate: '命', insurance: '保', hospital: '醫', rest: '休',
-    checkup: '檢', seminar: '講', myth: '觀', mentor: '貴', promo: '惠', attic: '整', missed: '錯',
-  };
+  // 格子上寫完整名稱（js/data.js 的 tileTypes[].name）；底色：C 為主題特殊色，A／B 為一般色
   const toneOf = (type, i) => (type === 'chance' ? 'A' : type === 'fate' ? 'B' : type === 'rest' ? (i % 2 ? 'B' : 'A') : 'C');
   const pageTheme = () => (document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
   const hopMs = () => (UI.reducedMotion() ? 60 : 220);
@@ -34,7 +30,7 @@
     art = RealLifeArt.create(canvas3d, {
       character: job.id,
       mode: pageTheme(),
-      tiles: TILES.map((t, i) => ({ glyph: GLYPH[t.type] || '', tone: toneOf(t.type, i) })),
+      tiles: TILES.map((t, i) => ({ label: t.name, tone: toneOf(t.type, i) })),
       reduced: () => UI.reducedMotion(),
     });
   }

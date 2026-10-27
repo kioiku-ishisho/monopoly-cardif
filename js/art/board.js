@@ -5,7 +5,7 @@
  *     character: 'doctor',            // 角色＝主題（單人遊戲）
  *     mode: 'light',                  // 'light' | 'dark'
  *     board: { arms: [18, 18, 12, 12], step: 0.1 },
- *     tiles: [{ glyph: '起', tone: 'C' }, ...],   // 共 arms 總和筆；tone：'C' 特殊色、'A'/'B' 一般色
+ *     tiles: [{ label: '起點', tone: 'C' }, ...], // 共 arms 總和筆；label：格子名稱（3 字以上分兩行）；tone：'C' 特殊色、'A'/'B' 一般色
  *     reduced: () => false,           // 是否減少動態
  *   });
  *   art.moveTo(12, { hopMs: 220 }) → Promise   逐格前進到第 12 格（繞圈自動處理）
@@ -122,10 +122,17 @@
     let mode = options.mode === 'dark' ? 'dark' : 'light';
     let C = null;
 
-    function glyphTex(ch, color) {
-      return K.canvasTex('g|' + ch + color, 128, 128, (x) => {
-        x.font = '900 92px "Noto Sans TC","PingFang TC","Microsoft JhengHei","Noto Sans CJK TC",sans-serif';
-        x.fillStyle = color; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(ch, 64, 70);
+    // 格子名稱：2 字一行，3 字以上分成兩行（前半較短），字級依最長一行縮到放得下
+    function labelTex(text, color) {
+      return K.canvasTex('g|' + text + color, 256, 256, (x) => {
+        const chars = [...text];
+        const lines = chars.length <= 2 ? [text] : [chars.slice(0, Math.floor(chars.length / 2)).join(''), chars.slice(Math.floor(chars.length / 2)).join('')];
+        const longest = Math.max(...lines.map((l) => [...l].length));
+        const size = Math.min(64, Math.floor(212 / longest));
+        x.font = '900 ' + size + 'px "Noto Sans TC","PingFang TC","Microsoft JhengHei","Noto Sans CJK TC",sans-serif';
+        x.fillStyle = color; x.textAlign = 'center'; x.textBaseline = 'middle';
+        const lh = size * 1.15, y0 = 132 - ((lines.length - 1) * lh) / 2;
+        lines.forEach((l, i) => x.fillText(l, 128, y0 + i * lh));
       });
     }
     // 一般格（A／B 底色）上的字：從主題色裡挑對比最高的
@@ -174,9 +181,9 @@
         if (i === 0) bottom = pen.pts[pen.armStart[3]].y - 0.7 - pen.m;
         const m = new T.Mesh(new T.BoxGeometry(0.92, p.y - bottom, 0.92), K.lam(col));
         m.position.set(p.x, (p.y + bottom) / 2, p.z); mapGroup.add(m); K.addEdges(m, INK, 0.85);
-        if (t.glyph) {
+        if (t.label) {
           const gc = tone === 'C' ? C.glyph : glyphOn(col);
-          const gp = new T.Mesh(new T.PlaneGeometry(0.72, 0.72), new T.MeshBasicMaterial({ map: glyphTex(t.glyph, gc), transparent: true, depthWrite: false }));
+          const gp = new T.Mesh(new T.PlaneGeometry(0.86, 0.86), new T.MeshBasicMaterial({ map: labelTex(t.label, gc), transparent: true, depthWrite: false }));
           gp.rotation.order = 'YXZ'; gp.rotation.set(-Math.PI / 2, Math.PI / 4, 0); gp.position.set(p.x, p.y + 0.012, p.z); mapGroup.add(gp);
         }
         const sh = new T.Mesh(new T.PlaneGeometry(0.94, 0.94), new T.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.1, depthWrite: false }));

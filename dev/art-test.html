@@ -36,8 +36,8 @@
   <script src="../js/art/board.js"></script>
   <script>
     const A = RealLifeArt;
-    const types = ['起', '機', '命', '保', '醫', '休', '檢', ''];
-    const tiles = Array.from({ length: 60 }, (_, i) => ({ glyph: i === 0 ? '起' : types[1 + (i % 7)], tone: i === 0 || i % 7 === 2 ? 'C' : i % 2 ? 'B' : 'A' }));
+    const types = ['起點', '機會', '命運', '保險業務員', '住院', '休息', '保單健檢', '保單整理日'];
+    const tiles = Array.from({ length: 60 }, (_, i) => ({ label: i === 0 ? '起點' : types[1 + (i % 7)], tone: i === 0 || i % 7 === 2 ? 'C' : i % 2 ? 'B' : 'A' }));
     const art = (window.art = A.create(document.getElementById('c'), { character: 'doctor', mode: 'light', tiles }));
     const out = document.getElementById('out');
     const show = () => { const i = art.info(); out.textContent = `idx ${i.idx} laps ${i.laps} calls ${i.calls} tris ${i.triangles} geo ${i.geometries} tex ${i.textures}`; };

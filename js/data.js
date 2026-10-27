@@ -6,8 +6,8 @@
   //   命運牌在伺服器端依此加權抽牌（api/games/[id]/draw.js 的 drawWeight），重大疾病在 js/game.js 套用
   const jobs = [
     { id: 'engineer', name: '軟體工程師', icon: '👩‍💻', color: '#4c6ef5', light: '#b6dc76', dark: '#442b48', btn: '#442b48', btnText: '#dbff76', salary: 58000, expense: 32000, desc: '收入高、工時長，要多留意健康。', risk: { accident: 0.7, heart: 1.3, mental: 1.4 } },
-    { id: 'teacher', name: '國小老師', icon: '👨‍🏫', color: '#2b8a3e', light: '#f2c57c', dark: '#426a5a', btn: '#426a5a', btnText: '#f2c57c', salary: 46000, expense: 28000, desc: '收入穩定，退休制度完善。', risk: {} },
-    { id: 'nurse', name: '護理師', icon: '👩‍⚕️', color: '#c2255c', light: '#cad2c5', dark: '#2f3e46', btn: '#52796f', btnText: '#ffffff', salary: 50000, expense: 29000, desc: '輪班辛苦，健康管理很重要。', risk: { hospital: 1.2, heart: 1.2, mental: 1.3 } },
+    { id: 'teacher', name: '國小老師', icon: '👨‍🏫', color: '#2b8a3e', light: '#f2c57c', dark: '#141f1b', btn: '#426a5a', btnText: '#f2c57c', salary: 46000, expense: 28000, desc: '收入穩定，退休制度完善。', risk: {} },
+    { id: 'nurse', name: '護理師', icon: '👩‍⚕️', color: '#c2255c', light: '#cad2c5', dark: '#101618', btn: '#52796f', btnText: '#ffffff', salary: 50000, expense: 29000, desc: '輪班辛苦，健康管理很重要。', risk: { hospital: 1.2, heart: 1.2, mental: 1.3 } },
     { id: 'sales', name: '業務專員', icon: '🧑‍💼', color: '#e67700', light: '#e5e5e5', dark: '#14213d', btn: '#fca311', btnText: '#000000', salary: 42000, expense: 30000, desc: '底薪普通，獎金變動大。', risk: { accident: 1.2, mental: 1.2 } },
     { id: 'chef', name: '廚師', icon: '👨‍🍳', color: '#d9480f', light: '#f2d398', dark: '#000000', btn: '#de1a1a', btnText: '#ffffff', salary: 38000, expense: 26000, desc: '靠手藝吃飯，未來有機會創業。', risk: { accident: 1.5 } },
     { id: 'designer', name: '平面設計師', icon: '🧑‍🎨', color: '#7048e8', light: '#76bed0', dark: '#000000', btn: '#f55d3e', btnText: '#000000', salary: 40000, expense: 27000, desc: '接案收入不固定，需要預備金。', risk: { mental: 1.1 } },
