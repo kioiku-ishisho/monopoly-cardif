@@ -14,6 +14,7 @@
   if (!setup) { location.replace('index.html'); return; } // 沒有 window.Game，其他模組會直接略過
   const job = D.jobs.find((j) => j.id === setup.jobId) || D.jobs[0];
 
+  UI.applyJobTheme(job); // 遊戲頁的主按鈕、彈窗配色跟著職業
   UI.fillIcons();
   UI.bindDialogs();
 

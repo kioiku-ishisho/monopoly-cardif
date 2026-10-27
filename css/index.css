@@ -198,7 +198,7 @@
   background: var(--surface-2);
   font-weight: 700;
 }
-.best-score strong { font-size: 1.4rem; color: var(--primary); }
+.best-score strong { font-size: 1.4rem; color: var(--job-ink, var(--primary)); }
 .history-list, .tip-list { list-style: none; padding: 0 !important; margin: 0; display: grid; gap: 10px; }
 .history-item, .tip-item {
   padding: 12px 14px;
@@ -209,7 +209,7 @@
 .history-item { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; }
 .history-item .h-title { font-weight: 700; }
 .history-item .h-meta { grid-column: 1; color: var(--text-muted); font-size: 0.9rem; }
-.history-item .h-score { grid-row: 1 / span 2; grid-column: 2; font-size: 1.5rem; font-weight: 900; color: var(--primary); text-align: right; }
+.history-item .h-score { grid-row: 1 / span 2; grid-column: 2; font-size: 1.5rem; font-weight: 900; color: var(--job-ink, var(--primary)); text-align: right; }
 .history-item .h-score small { display: block; font-size: 0.75rem; color: var(--text-muted); font-weight: 700; }
 
 .tip-item h3 { font-size: 1rem; margin-bottom: 4px; }

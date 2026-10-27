@@ -172,13 +172,14 @@
         skyGroup.add(new T.Points(pg, new T.PointsMaterial({ color: 0xffffff, size: 2.2, sizeAttenuation: false, transparent: true, opacity: 0.8 })));
       }
 
-      /* 階梯本體：同一臂的方塊底面等高；第 0 格是「第 N 格」的替身 */
+      /* 階梯本體：每格都是柱子，畫面上底面全部切齊地板。
+         繞一圈會高 m，底面的落差一定要出現在某處：第 4 臂（轉角那格除外）整段浮高 m，
+         沿視線看等於站在地板上，落差藏在左轉角、被第 3 臂的柱子擋住 */
       pen.pts.forEach((p, i) => {
         const t = tiles[i] || {};
         const tone = t.tone || (i % 2 ? 'B' : 'A');
         const col = C[tone] || C.A;
-        let bottom = pen.pts[pen.armStart[pen.armOf(i)]].y - 0.7;
-        if (i === 0) bottom = pen.pts[pen.armStart[3]].y - 0.7 - pen.m;
+        const bottom = i > pen.armStart[3] ? FLOOR_Y + pen.m : FLOOR_Y;
         const m = new T.Mesh(new T.BoxGeometry(0.92, p.y - bottom, 0.92), K.lam(col));
         m.position.set(p.x, (p.y + bottom) / 2, p.z); mapGroup.add(m); K.addEdges(m, INK, 0.85);
         if (t.label) {
@@ -186,8 +187,6 @@
           const gp = new T.Mesh(new T.PlaneGeometry(0.86, 0.86), new T.MeshBasicMaterial({ map: labelTex(t.label, gc), transparent: true, depthWrite: false }));
           gp.rotation.order = 'YXZ'; gp.rotation.set(-Math.PI / 2, Math.PI / 4, 0); gp.position.set(p.x, p.y + 0.012, p.z); mapGroup.add(gp);
         }
-        const sh = new T.Mesh(new T.PlaneGeometry(0.94, 0.94), new T.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.1, depthWrite: false }));
-        sh.rotation.x = -Math.PI / 2; sh.position.set(p.x, FLOOR_Y + 0.04, p.z); mapGroup.add(sh);
       });
       const st = pen.pts[0], flag = K.group(mapGroup, [st.x - 0.32, st.y, st.z - 0.32]);
       K.cy(flag, 0.025, 0.025, 1.0, INK, 0, 0.5, 0, { ink: false }); K.bx(flag, 0.4, 0.26, 0.02, C.C, 0.2, 0.86, 0, { t: 0.05 });

@@ -10,7 +10,7 @@
   --surface-2: #eef6f1;
   --text: #1c2a23;
   --text-muted: #4b5d54;
-  --border: #rgb(213 213 213 / 38%);
+  --border: rgb(213 213 213 / 38%);
   --primary: #00804f;
   --primary-strong: #00663f;
   --on-primary: #ffffff;
@@ -250,8 +250,40 @@ dialog.modal {
 dialog.modal[open] { display: flex; flex-direction: column; animation: pop-in 0.18s ease-out; }
 /* 用 flex-basis: auto，避免 Safari 在只有 max-height 時把 0% 基準算成高度 0 */
 dialog.modal > form { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
-dialog.modal::backdrop { background: rgba(0, 20, 10, 0.55); backdrop-filter: blur(2px); }
-:root[data-theme="dark"] dialog.modal { background: #06140d; box-shadow: var(--shadow), var(--glow); }
+dialog.modal::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+  background: color-mix(in srgb, var(--job-dark, #000) 60%, transparent);
+  backdrop-filter: blur(2px);
+}
+:root[data-theme="dark"] dialog.modal { box-shadow: var(--shadow), var(--glow); }
+/* 彈窗配色跟著職業（--job-*），不用全站綠色；高對比模式維持原樣
+ * --job-ink：彈窗內的強調文字（分數、金額），淺色用職業深色、深色用職業淺色 */
+:root:not([data-contrast="high"]) :is(dialog.modal, dialog.tutorial) {
+  --primary: var(--job-btn);
+  --primary-strong: color-mix(in srgb, var(--job-btn) 80%, #000);
+  --on-primary: var(--job-btn-text);
+  --job-ink: var(--job-dark);
+  --surface: #ffffff;
+  --surface-2: color-mix(in srgb, var(--job-light) 30%, #ffffff);
+  --border: color-mix(in srgb, var(--job-dark) 22%, transparent);
+  --shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+  --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.1);
+  --glow: none;
+}
+:root[data-theme="dark"]:not([data-contrast="high"]) :is(dialog.modal, dialog.tutorial) {
+  --primary: var(--job-light);
+  --primary-strong: color-mix(in srgb, var(--job-light) 80%, #ffffff);
+  --on-primary: var(--job-dark);
+  --job-ink: var(--job-light);
+  --surface: color-mix(in srgb, var(--job-dark) 30%, #0b0b0b);
+  --surface-2: color-mix(in srgb, var(--job-light) 12%, var(--surface));
+  --text: #f1f1f1;
+  --text-muted: #b8b8b8;
+  --border: color-mix(in srgb, var(--job-light) 35%, transparent);
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  --shadow-sm: none;
+  --glow: 0 0 18px color-mix(in srgb, var(--job-light) 30%, transparent);
+}
 .modal-head {
   display: flex;
   align-items: center;
@@ -259,6 +291,7 @@ dialog.modal::backdrop { background: rgba(0, 20, 10, 0.55); backdrop-filter: blu
   gap: 12px;
   padding: 14px 14px 10px 22px;
   border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
 }
 .modal-head h2 { font-size: 1.25rem; }
 .modal-body { padding: 18px 22px; overflow-y: auto; flex: 1 1 auto; min-height: 0; -webkit-overflow-scrolling: touch; }
@@ -395,12 +428,12 @@ fieldset.field { border: 0; padding: 0; margin: 0 0 18px; }
 
 /* ===== 全服排行榜 ===== */
 .lb-mine { padding: 12px 14px; border-radius: var(--radius-sm); background: var(--surface-2); font-weight: 700; }
-.lb-mine strong { color: var(--primary); font-size: 1.1em; }
+.lb-mine strong { color: var(--job-ink, var(--primary)); font-size: 1.1em; }
 .lb-table td, .lb-table th { padding: 10px 8px; border-bottom: 1px solid var(--border); text-align: left; }
 .lb-table thead th { font-size: 0.8rem; color: var(--text-muted); }
 .lb-table { width: 100%; border-collapse: collapse; }
 .lb-rank { width: 3.5em; font-weight: 900; font-size: 1.1rem; }
-.lb-score { font-weight: 900; color: var(--primary); white-space: nowrap; }
+.lb-score { font-weight: 900; color: var(--job-ink, var(--primary)); white-space: nowrap; }
 .lb-score small { margin-left: 4px; color: var(--text-muted); font-size: 0.75rem; }
 .lb-table tr.is-me { background: var(--surface-2); outline: 2px solid var(--primary); outline-offset: -2px; }
-.lb-me { color: var(--primary); }
+.lb-me { color: var(--job-ink, var(--primary)); }
